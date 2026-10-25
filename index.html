@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Twig</title>
+<meta name="description" content="Twig turns an indented outline into a mind map. Works offline, no account, no tracking.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230066B8'/%3E%3Cpath d='M11 7v18M11 16h11' stroke='%23fff' stroke-width='2.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="src/styles.css">
+<style id="pageStyle"></style>
+</head>
+<body data-view="text">
+
+<header class="bar">
+  <div class="brand" aria-label="Twig"><span class="glyph">├─</span>twig</div>
+  <details class="menu" id="fileMenu">
+    <summary>File</summary>
+    <div class="panel">
+      <button data-act="open">Upload…</button>
+      <button data-act="new">New</button>
+      <button data-act="example">Load example</button>
+      <hr>
+      <details class="sub">
+        <summary>Copy</summary>
+        <div class="panel flyout">
+          <button data-act="copy-tree">Tree as text</button>
+          <button data-act="copy-md">Markdown list</button>
+          <button data-act="copy-mermaid">Mermaid mindmap</button>
+        </div>
+      </details>
+      <details class="sub">
+        <summary>Export</summary>
+        <div class="panel flyout">
+          <div class="label">Download</div>
+          <button data-act="dl-txt">Tree (.txt)</button>
+          <button data-act="dl-opml">Outline (.opml)</button>
+          <button data-act="dl-json">Data (.json)</button>
+          <button data-act="dl-svg">Image (.svg)</button>
+          <button data-act="dl-png">Image (.png)</button>
+          <div class="label">PDF</div>
+          <button data-act="print-tree">Print tree</button>
+          <button data-act="print-map">Print map</button>
+        </div>
+      </details>
+    </div>
+  </details>
+  <button class="tbtn" id="aboutBtn" type="button">About</button>
+  <div class="spacer"></div>
+  <button class="ib" id="settingsBtn" type="button" title="Settings" aria-label="Settings"><svg class="i" viewBox="0 0 24 24" id="settingsIcon"></svg></button>
+</header>
+
+<div class="actions" id="actions" role="toolbar" aria-label="Actions">
+  <span class="txt-only">
+    <button class="ib" data-op="outdent" data-icon="outdent" title="Outdent (Shift+Tab)" aria-label="Outdent"></button>
+    <button class="ib" data-op="indent" data-icon="indent" title="Indent (Tab)" aria-label="Indent"></button>
+    <span class="vsep"></span>
+    <button class="ib" data-op="up" data-icon="up" title="Move up (Alt+↑)" aria-label="Move up"></button>
+    <button class="ib" data-op="down" data-icon="down" title="Move down (Alt+↓)" aria-label="Move down"></button>
+    <span class="vsep"></span>
+    <button class="ib" data-op="sibling" data-icon="sibling" title="Add sibling (Enter)" aria-label="Add sibling"></button>
+    <button class="ib" data-op="child" data-icon="child" title="Add child (Ctrl+Enter)" aria-label="Add child"></button>
+    <button class="ib" data-op="delete" data-icon="trash" title="Delete branch" aria-label="Delete branch"></button>
+    <span class="vsep"></span>
+  </span>
+  <button class="ib" data-op="undo" data-icon="undo" title="Undo" aria-label="Undo"></button>
+  <button class="ib" data-op="redo" data-icon="redo" title="Redo" aria-label="Redo"></button>
+  <span class="grow"></span>
+  <span class="tree-ind" id="treeInd" hidden></span>
+  <span class="stats" id="stats"></span>
+  <div class="views" id="viewSeg" role="group" aria-label="View">
+    <button class="ib" data-view="text" data-icon="text" title="Text" aria-label="Text view" aria-pressed="false"></button>
+    <button class="ib" data-view="map" data-icon="map" title="Map" aria-label="Map view" aria-pressed="false"></button>
+  </div>
+</div>
+
+<main class="panes">
+  <section class="pane pane-text" id="paneText">
+    <div class="editor">
+      <div class="linehl" id="lineHl"></div>
+      <div class="gutter" id="gutter" aria-hidden="true"></div>
+      <textarea id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off" aria-label="Tree outline"></textarea>
+    </div>
+  </section>
+  <section class="pane pane-map" id="paneMap">
+    <div class="mapbox">
+      <nav class="toc" id="toc" aria-label="Trees" hidden></nav>
+      <div class="mapwrap" id="mapWrap" tabindex="0" aria-label="Mind map. Click a node to rename it or jump to its line."><div id="mapHost"></div></div>
+      <div class="mapctl" role="toolbar" aria-label="Zoom">
+        <button class="ib" id="zoomOut" data-icon="minus" title="Zoom out" aria-label="Zoom out"></button>
+        <span class="lbl" id="zoomLbl">100%</span>
+        <button class="ib" id="zoomIn" data-icon="sibling" title="Zoom in" aria-label="Zoom in"></button>
+        <button class="ib" id="zoomFit" data-icon="fit" title="Fit to window" aria-label="Fit to window"></button>
+      </div>
+      <div class="maphint"><span class="h-fine">Click a node to rename it or jump to its line</span><span class="h-coarse">Tap a node to rename it or jump to its line</span></div>
+    </div>
+  </section>
+</main>
+
+<dialog id="settingsDlg" aria-labelledby="settingsTitle">
+  <button class="ib close" id="settingsClose" type="button" data-icon="close" title="Close" aria-label="Close"></button>
+  <h2 id="settingsTitle">Settings</h2>
+  <div class="label">Theme</div>
+  <div class="seg" id="themeSeg" role="group" aria-label="Theme"></div>
+  <div class="label">Font</div>
+  <div class="seg" id="fontSeg" role="group" aria-label="Font"></div>
+  <div class="label">Empty cell text</div>
+  <input id="fillInput" type="text" maxlength="24" placeholder="TBD" autocomplete="off" spellcheck="false" aria-label="Empty cell text">
+  <p class="hint">Written into the gap when you skip an indent level.</p>
+</dialog>
+
+<dialog id="aboutDlg" aria-labelledby="aboutTitle">
+  <button class="ib close" id="aboutClose" type="button" data-icon="close" title="Close" aria-label="Close"></button>
+  <div class="hero">
+    <div class="logo" aria-hidden="true">├─</div>
+    <h2 id="aboutTitle">twig</h2>
+    <p class="desc">Text first mind mapping. Indent to build a mind map, a tree, a data set, or whatever you are thinking through.</p>
+    <p class="meta">
+      <span>Made by <a href="https://hiran.in" target="_blank" rel="noopener">Hiran Venugopalan</a></span>
+      <a href="https://github.com/hfactor/twig" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/hfactor/twig/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+    </p>
+  </div>
+  <dl class="keys">
+    <dt><kbd>Tab</kbd></dt><dd>Indent</dd>
+    <dt><kbd>Shift</kbd> <kbd>Tab</kbd></dt><dd>Outdent</dd>
+    <dt><kbd>Enter</kbd></dt><dd>New sibling, or new tree at top level</dd>
+    <dt><kbd>Ctrl</kbd> <kbd>Enter</kbd></dt><dd>New child</dd>
+    <dt><kbd>Alt</kbd> <kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Move branch</dd>
+    <dt><kbd>Esc</kbd> <kbd>Tab</kbd></dt><dd>Leave the editor</dd>
+    <dt><kbd>Right-click</kbd></dt><dd>More actions</dd>
+  </dl>
+</dialog>
+
+<div class="ctx" id="ctx" role="menu" hidden></div>
+<div id="printOut" aria-hidden="true"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="fileInput" accept=".txt,.md,.text,text/plain" hidden>
+
+<script src="src/core.js"></script>
+<script src="src/app.js"></script>
+</body>
+</html>
