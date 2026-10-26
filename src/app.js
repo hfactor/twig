@@ -12,10 +12,10 @@ const FONTS = [['system', 'System', ''], ['jetbrains', 'JetBrains Mono', 'JetBra
 const LH = 24, PAD = 16;
 
 /* The same text is parsed several times per keystroke; keep the last result and hand out copies, since callers mutate items. */
-let memoText = null, memoItems = null;
+let memoText = null, memoItems = null, memoFill = null;
 function parse(text){
-  if (text !== memoText){ memoItems = C.parseDoc(text); memoText = text; }
-  return memoItems.map(x => ({depth: x.depth, text: x.text, src: x.src}));
+  if (text !== memoText || memoFill !== fill){ memoItems = C.parseDoc(text, {fill}); memoText = text; memoFill = fill; }
+  return C.cloneItems(memoItems);
 }
 
 const ICONS = {
@@ -34,9 +34,8 @@ const ICONS = {
   map:'<rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/>',
   fit:'<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
   gear:'<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
-  palette:'<circle cx="13.5" cy="6.5" r=".6"/><circle cx="17.5" cy="10.5" r=".6"/><circle cx="8.5" cy="7.5" r=".6"/><circle cx="6.5" cy="12.5" r=".6"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.65-.75 1.65-1.69 0-.44-.18-.84-.44-1.12-.29-.29-.44-.65-.44-1.13a1.64 1.64 0 0 1 1.67-1.67h2c3.05 0 5.55-2.5 5.55-5.55C21.97 6.01 17.46 2 12 2z"/>',
-  check:'<path d="M20 6 9 17l-5-5"/>',
   close:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  at:'<circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/>',
   copy:'<rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>'
 };
 const svgIcon = n => '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[n] + '</svg>';
@@ -48,7 +47,7 @@ let guard = false, composing = false, leaveOnTab = false;
 let treeSel = -1;
 let zoomMode = 'fit', zoom = 1, mapSize = {w: 1, h: 1}, raf = 0, lastActive = -2, curRange = [-1, -1];
 
-/* ---------- storage and theme ---------- */
+/* ---------- storage and settings ---------- */
 function loadSaved(){ try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } }
 let saveTimer;
 function save(){
@@ -89,7 +88,9 @@ function applyFont(){
   document.documentElement.style.setProperty('--mono', f[2] ? "'" + f[2] + "'," + SYS_MONO : SYS_MONO);
   segment($('#fontSeg'), FONTS, font, id => { font = id; applyFont(); save(); });
 }
-$('#fillInput').addEventListener('input', e => { fill = e.target.value.trim(); save(); lastActive = -2; renderMap(); });
+/* blank is not allowed: it would make the field look filled (grey TBD) while writing nothing */
+$('#fillInput').addEventListener('input', e => { fill = e.target.value.trim() || 'TBD'; save(); lastActive = -2; renderMap(); });
+$('#fillInput').addEventListener('change', e => { e.target.value = fill; });
 
 /* ---------- small helpers ---------- */
 let toastTimer;
@@ -143,11 +144,13 @@ function lineInfo(text, pos){
   return {lineIdx, lineStart};
 }
 function currentLine(){ return lineInfo(ta.value, ta.selectionStart).lineIdx; }
-function state(){
+/* keep: read the editor as it is, without finishing any @n being typed */
+function state(keep){
+  if (!keep && ta.value.indexOf('@') >= 0) normalize(false, true);
   const text = ta.value, items = parse(text), lines = text.split('\n');
   const {lineIdx, lineStart} = lineInfo(text, ta.selectionStart);
   const idx = Math.min(lineIdx, items.length - 1);
-  const raw = lines[idx] || '';
+  const raw = C.stripArt(lines[idx] || '');
   const col = ta.selectionStart - lineStart;
   const textStart = raw.length - items[idx].text.length;
   const off = Math.max(0, Math.min(items[idx].text.length, col - textStart));
@@ -173,7 +176,7 @@ function ensureVisible(idx){
 function selectLine(i, focus){
   const text = ta.value; let pos = 0;
   for (let k = 0; k < i; k++){ const n = text.indexOf('\n', pos); if (n < 0){ pos = text.length; break; } pos = n + 1; }
-  const end = text.indexOf('\n', pos), p = end < 0 ? text.length : end;
+  const end = text.indexOf('\n', pos), p = pos + C.stripArt(text.slice(pos, end < 0 ? text.length : end)).length;
   if (focus) ta.focus({preventScroll: true});
   ta.setSelectionRange(p, p);
   ensureVisible(i);
@@ -183,7 +186,7 @@ function selectLine(i, focus){
 /* Render items back to ASCII, write them into the editor and put the caret on node idx. */
 function commit(items, idx, off){
   C.repair(items);
-  const r = C.renderItems(items, SET);
+  const r = C.renderDoc(items, SET);
   setValue(r.lines.join('\n'));
   idx = Math.max(0, Math.min(idx, items.length - 1));
   let pos = 0;
@@ -193,12 +196,23 @@ function commit(items, idx, off){
   ensureVisible(idx);
   changed();
 }
-/* Called after typing, pasting or any edit that may have broken the line prefixes. */
-function normalize(imp){
+/* Links live in the drawn art, so a raw edit that changes a line's length moves that line's art sideways.
+   Compare with the text from before the edit to know by how much (null: line count changed, ignore that art). */
+let lastText = '';
+function rawShifts(prev, cur){
+  const A = prev.split('\n'), B = cur.split('\n');
+  if (A.length === B.length) return B.map((l, i) => l === A[i] ? 0 : l.length - A[i].length);
+  let p = 0; while (p < A.length && p < B.length && A[p] === B[p]) p++;
+  let s = 0; while (s < A.length - p && s < B.length - p && A[A.length - 1 - s] === B[B.length - 1 - s]) s++;
+  return B.map((l, i) => (i < p || i >= B.length - s) ? 0 : null);
+}
+/* Called after typing, pasting or any edit that may have broken the line prefixes or the link art.
+   convert: turn typed @n tokens into drawn links. shift: see rawShifts. */
+function normalize(imp, convert, shift){
   const cur = ta.value;
-  const items = C.parseDoc(cur, {imp});
-  const next = C.renderItems(items, SET).lines.join('\n');
-  if (next === cur) return;
+  const items = C.parseDoc(cur, {imp, shift, fill});
+  const render = () => C.renderDoc(items, SET).lines.join('\n');
+  if (!convert && render() === cur) return;
   const {lineIdx, lineStart} = lineInfo(cur, ta.selectionStart);
   let idx = 0;
   for (let k = 0; k < items.length; k++){ if (items[k].src <= lineIdx) idx = k; else break; }
@@ -206,10 +220,70 @@ function normalize(imp){
   if (imp || items[idx].src !== lineIdx) off = items[idx].text.length;
   else {
     const end = cur.indexOf('\n', lineStart);
-    const rawLen = (end < 0 ? cur.length : end) - lineStart;
+    const rawLen = C.stripArt(cur.slice(lineStart, end < 0 ? cur.length : end)).length;
     off = (ta.selectionStart - lineStart) - (rawLen - items[idx].text.length);
+    /* spaces typed after the text look like padding next to the art; the caret position tells us how many are real */
+    const extra = off - items[idx].text.length;
+    if (extra > 0 && extra <= 40 && cur.charAt(ta.selectionStart - 1) === ' ') items[idx].text += ' '.repeat(extra);
   }
+  if (convert) C.convertTokens(items, {terminated: convert === 'terminated'});
+  if (render() === cur) return;
   commit(items, idx, off);
+}
+
+/* ---------- links: press @, click the line to link to; remove from the menu ---------- */
+let linkFrom = -1;
+const shortText = s => { const t = s.trim() || '(empty)'; return t.length > 24 ? t.slice(0, 23) + '…' : t; };
+function startLink(){
+  if (linkFrom >= 0){ cancelLink(); return; }
+  linkFrom = view === 'map' ? currentLine() : state().idx;
+  document.body.classList.add('linking');
+  $('#linkHint').hidden = false; $('#stats').hidden = true;
+}
+function cancelLink(){
+  linkFrom = -1;
+  document.body.classList.remove('linking');
+  $('#linkHint').hidden = true; $('#stats').hidden = false;
+}
+function finishLink(to, indirect){
+  const from = linkFrom;
+  cancelLink();
+  if (to === from){ toast('A line cannot link to itself'); return; }
+  const st = state(), a = st.items[from], b = st.items[to];
+  if (!a || !b) return;
+  if (a.links.some(l => l.ref === b && l.indirect === indirect)){ toast('Already linked'); return; }
+  a.links.push({ref: b, indirect});
+  commit(st.items, from, a.text.length);
+  toast('Linked “' + shortText(a.text) + '” to “' + shortText(b.text) + '”' + (indirect ? ' (dashed)' : ''));
+}
+/* picking a line in the editor: click the text or its line number */
+function pickFromEditor(e){
+  if (linkFrom < 0) return;
+  e.preventDefault(); e.stopPropagation();
+  const r = ta.getBoundingClientRect(), n = ta.value.split('\n').length;
+  finishLink(Math.max(0, Math.min(n - 1, Math.floor((e.clientY - r.top + ta.scrollTop - PAD) / LH))), e.shiftKey);
+}
+ta.addEventListener('mousedown', pickFromEditor, true);
+gutter.addEventListener('mousedown', pickFromEditor, true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && linkFrom >= 0) cancelLink(); });
+
+/* Remove one link, given the lines at its two ends (same numbering as the current text). */
+function removeLink(fromIdx, toIdx, indirect){
+  const st = state(), from = st.items[fromIdx], to = st.items[toIdx];
+  if (!from || !to) return;
+  from.links = from.links.filter(l => !(l.ref === to && l.indirect === indirect));
+  commit(st.items, st.idx, st.off);
+  toast('Link removed');
+}
+/* Remove every link that starts or ends on the current line. */
+function doRemoveLinks(){
+  const st = state(), it = st.items[st.idx];
+  let n = it.links.length;
+  it.links = [];
+  st.items.forEach(x => { const before = x.links.length; x.links = x.links.filter(l => l.ref !== it); n += before - x.links.length; });
+  if (!n){ toast('No links on this line'); return; }
+  commit(st.items, st.idx, st.off);
+  toast(n === 1 ? 'Link removed' : n + ' links removed');
 }
 
 /* ---------- structure commands (all act on the selected line, in any view) ---------- */
@@ -253,7 +327,7 @@ function doEnter(asChild, opt){
 function doDuplicate(){ structOp((i, a, b) => C.opDuplicate(i, a, b)); }
 function doCopyBranch(){
   const st = state(), [a, b] = selRange(st.items), e = C.blockEnd(st.items, a, b), base = st.items[a].depth;
-  const blk = st.items.slice(a, e).map(x => ({depth: x.depth - base, text: x.text}));
+  const blk = st.items.slice(a, e).map(x => ({depth: x.depth - base, text: C.parseLinks(x.text).text}));
   copyText(C.toTree(blk, SET), 'Branch');
 }
 function doUndo(redo){
@@ -283,6 +357,19 @@ ta.addEventListener('keydown', e => {
     return;
   }
   leaveOnTab = false;
+  if (e.key === 'End' && !e.ctrlKey && !e.metaKey && !e.altKey){
+    /* on a line with link art, End means the end of the text, not the end of the drawing */
+    const st = state(true);
+    if (C.artStart(st.lines[st.idx]) >= 0){
+      e.preventDefault();
+      const textEnd = st.textStart + st.items[st.idx].text.length;
+      const anchor = ta.selectionDirection === 'backward' ? ta.selectionEnd : ta.selectionStart, to = anchor - st.col + textEnd;
+      if (e.shiftKey) ta.setSelectionRange(Math.min(anchor, to), Math.max(anchor, to), to < anchor ? 'backward' : 'forward');
+      else ta.setSelectionRange(to, to);
+      syncCaretUI();
+      return;
+    }
+  }
   if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')){
     e.preventDefault(); doMove(e.key === 'ArrowUp' ? -1 : 1); return;
   }
@@ -292,10 +379,20 @@ ta.addEventListener('keydown', e => {
 ta.addEventListener('beforeinput', e => {
   if (guard || composing || e.isComposing) return;
   const t = e.inputType;
+  if (!/^history|^insertParagraph|^insertLineBreak/.test(t) && ta.selectionStart === ta.selectionEnd){
+    /* Padding before the art is ordinary text space. From the first drawn character on, edits belong to the text (or, for delete keys, to the links). */
+    const st = state(true), as = C.artStart(st.lines[st.idx]), textEnd = st.textStart + st.items[st.idx].text.length;
+    const del = t === 'deleteContentBackward' || t === 'deleteContentForward';
+    if (as >= 0 && st.col >= as + (t === 'deleteContentBackward' ? 1 : 0)){
+      const here = st.items[st.idx];
+      if (del && (here.links.length || st.items.some(x => x.links.some(l => l.ref === here)))){ e.preventDefault(); doRemoveLinks(); return; }
+      const p = ta.selectionStart - st.col + textEnd; ta.setSelectionRange(p, p);
+    }
+  }
   if (t === 'insertParagraph' || t === 'insertLineBreak'){ e.preventDefault(); doEnter(false); return; }
   if (ta.selectionStart !== ta.selectionEnd) return;
   if (t === 'deleteContentBackward'){
-    const st = state();
+    const st = state(true);
     if (st.col > st.textStart) return;
     const it = st.items[st.idx];
     if (it.depth > 0){
@@ -310,8 +407,8 @@ ta.addEventListener('beforeinput', e => {
     return;
   }
   if (t === 'deleteContentForward'){
-    const st = state();
-    if (st.col !== st.lines[st.idx].length || st.idx >= st.items.length - 1) return;
+    const st = state(true);
+    if (st.col !== C.stripArt(st.lines[st.idx]).length || st.idx >= st.items.length - 1) return;
     e.preventDefault();
     const nxt = st.items.splice(st.idx + 1, 1)[0];
     st.items[st.idx].text += nxt.text;
@@ -320,12 +417,14 @@ ta.addEventListener('beforeinput', e => {
 });
 ta.addEventListener('input', e => {
   if (guard || composing) return;
-  normalize(e.inputType === 'insertFromPaste' || e.inputType === 'insertFromDrop');
+  const history = e.inputType === 'historyUndo' || e.inputType === 'historyRedo';
+  /* @12 becomes a link once it is finished: followed by a space (here), or by Enter or leaving the editor */
+  normalize(e.inputType === 'insertFromPaste' || e.inputType === 'insertFromDrop', 'terminated', history ? undefined : rawShifts(lastText, ta.value));
   changed();
 });
 ta.addEventListener('compositionstart', () => { composing = true; });
-ta.addEventListener('compositionend', () => { composing = false; normalize(false); changed(); });
-ta.addEventListener('blur', () => { leaveOnTab = false; });
+ta.addEventListener('compositionend', () => { composing = false; normalize(false, false, rawShifts(lastText, ta.value)); changed(); });
+ta.addEventListener('blur', () => { leaveOnTab = false; if (!composing && ta.value.indexOf('@') >= 0){ normalize(false, true); changed(); } });
 ta.addEventListener('scroll', () => { gutter.scrollTop = ta.scrollTop; placeHighlight(); });
 ['keyup', 'pointerup', 'focus'].forEach(ev => ta.addEventListener(ev, () => syncCaretUI()));
 document.addEventListener('selectionchange', () => { if (document.activeElement === ta) syncCaretUI(); });
@@ -345,6 +444,7 @@ function runOp(op){
   else if (op === 'sibling') addNode(false);
   else if (op === 'child') addNode(true);
   else if (op === 'delete') doDelete();
+  else if (op === 'link') startLink();
   else if (op === 'undo') doUndo(false);
   else if (op === 'redo') doUndo(true);
 }
@@ -375,7 +475,6 @@ function treeRoots(){
 function markTrees(){
   const roots = treeRoots(), multi = roots.length > 1, kids = gutter.children;
   for (let i = 0; i < kids.length; i++){ kids[i].classList.remove('root'); kids[i].removeAttribute('data-t'); }
-  gutter.classList.toggle('multi', multi);
   if (multi) roots.forEach((k, t) => { if (kids[k]){ kids[k].classList.add('root'); kids[k].dataset.t = t + 1; } });
 }
 function updateTreeChip(){
@@ -411,7 +510,7 @@ function renderMap(){
     host.innerHTML = '<p class="empty">Type a line in the text view and your map appears here.</p>';
     mapSize = {w: 1, h: 1}; return;
   }
-  const out = C.buildSVG(treeSel >= 0 ? [m.roots[treeSel]] : m.roots, pal(), {ghost: fill});
+  const out = C.buildSVG(treeSel >= 0 ? [m.roots[treeSel]] : m.roots, pal(), {ghost: fill, all: treeSel >= 0 ? m.roots : null});
   mapSize = {w: out.w, h: out.h};
   host.innerHTML = out.svg;
   lastActive = -2;
@@ -444,7 +543,6 @@ function scheduleMap(){
   if (view === 'text' || raf) return;
   raf = requestAnimationFrame(() => { raf = 0; renderMap(); });
 }
-function flushMap(){ if (raf){ cancelAnimationFrame(raf); raf = 0; } renderMap(); }
 function applyZoom(){
   const s = $('svg', host); if (!s) return;
   const cw = wrap.clientWidth - 24, ch = wrap.clientHeight - 24;
@@ -473,7 +571,7 @@ function renameNode(i){
   const g = host.querySelector('.node[data-i="' + i + '"]');
   if (!g || renaming) return;
   const r = $('rect', g);
-  const items = parse(ta.value), old = items[i] ? items[i].text.trim() : '';
+  const items = parse(ta.value), pl = C.parseLinks(items[i] ? items[i].text : ''), old = pl.text.trim();
   const x = +r.getAttribute('x') * zoom, y = +r.getAttribute('y') * zoom;
   const w = Math.max(+r.getAttribute('width') * zoom, 150), h = Math.max(+r.getAttribute('height') * zoom, 32);
   const inp = document.createElement('input');
@@ -488,7 +586,7 @@ function renameNode(i){
     if (done) return; done = true;
     const v = inp.value.replace(/\s+/g, ' ').trim();
     renaming = null; inp.remove();
-    if (ok && v !== old) setNodeText(i, v);
+    if (ok && v !== old) setNodeText(i, v + pl.suffix);
     if (view === 'map') wrap.focus({preventScroll: true}); else ta.focus({preventScroll: true});
     if (then) then();
   };
@@ -500,7 +598,7 @@ function renameNode(i){
   inp.addEventListener('blur', () => finish(true));
 }
 
-/* Clicking a node offers two things: rename it, or jump to its line in the text. */
+/* Clicking a node offers three things: rename it, jump to its line in the text, or start a link from it. */
 function closePop(){ const p = host.querySelector('.nodepop'); if (p) p.remove(); }
 function showPop(i, g){
   closePop();
@@ -509,7 +607,8 @@ function showPop(i, g){
   p.style.left = (+r.getAttribute('x') * zoom) + 'px';
   p.style.top = ((+r.getAttribute('y') + +r.getAttribute('height')) * zoom + 6) + 'px';
   [['rename', 'Rename', () => renameNode(i)],
-   ['text', 'Go to line', () => { setView('text'); selectLine(i, true); }]].forEach(([ic, label, fn]) => {
+   ['text', 'Go to line', () => { setView('text'); selectLine(i, true); }],
+   ['at', 'Link to…', () => startLink()]].forEach(([ic, label, fn]) => {
     const b = mk('button', '', svgIcon(ic) + '<span>' + label + '</span>');
     b.type = 'button';
     b.addEventListener('click', ev => { ev.stopPropagation(); closePop(); fn(); });
@@ -518,7 +617,17 @@ function showPop(i, g){
   host.appendChild(p);
 }
 host.addEventListener('click', e => {
+  /* a node that stands for a link to or from another tree: jump to that tree and select the line */
+  const x = e.target.closest('.xref');
+  if (x){
+    const line = +x.dataset.ref, roots = model(true).roots, has = (n) => n.i === line || n.kids.some(has);
+    const t = roots.findIndex(has);
+    if (t >= 0 && treeSel >= 0 && t !== treeSel){ treeSel = t; zoomMode = 'fit'; selectLine(line, false); renderMap(); wrap.scrollTo(0, 0); }
+    else if (t >= 0) selectLine(line, false);
+    return;
+  }
   const g = e.target.closest('.node');
+  if (linkFrom >= 0){ closePop(); if (g && g.dataset.i !== undefined) finishLink(+g.dataset.i, e.shiftKey); else cancelLink(); return; }
   if (!g){ closePop(); return; }
   const i = +g.dataset.i;
   selectLine(i, false);
@@ -566,6 +675,7 @@ function showCtx(x, y){
   };
   item('sibling', 'Add sibling', 'Enter', () => addNode(false));
   item('child', 'Add child', 'Ctrl+Enter', () => addNode(true));
+  item('at', 'Link to another line…', '', startLink);
   ctx.appendChild(mk('hr'));
   item('indent', 'Indent', 'Tab', doIndent, can(C.opIndent));
   item('outdent', 'Outdent', 'Shift+Tab', doOutdent, can(C.opOutdent));
@@ -596,6 +706,20 @@ function showCtx(x, y){
   mv.append(num, go);
   ctx.appendChild(mv);
   ctx.appendChild(mk('hr'));
+  /* one entry per link on this line, naming the line at the other end */
+  const here = items[a];
+  const linked = [];
+  here.links.forEach(l => linked.push({out: true, from: a, to: items.indexOf(l.ref), other: l.ref, indirect: l.indirect}));
+  items.forEach((x, k) => x.links.forEach(l => { if (l.ref === here) linked.push({out: false, from: k, to: a, other: x, indirect: l.indirect}); }));
+  linked.forEach(l => {
+    const b2 = mk('button', 'item', svgIcon('trash') + '<span></span>');
+    $('span', b2).textContent = (l.out ? 'Remove link to “' : 'Remove link from “') + shortText(l.other.text) + '”' + (l.indirect ? ' (dashed)' : '');
+    b2.type = 'button'; b2.setAttribute('role', 'menuitem');
+    b2.addEventListener('click', run(() => removeLink(l.from, l.to, l.indirect)));
+    ctx.appendChild(b2);
+  });
+  if (linked.length > 1) item('trash', 'Remove all ' + linked.length + ' links on this line', '', doRemoveLinks);
+  if (linked.length) ctx.appendChild(mk('hr'));
   const acts = mk('div', 'row acts');
   [['copy', 'Duplicate', doDuplicate], ['copy', 'Copy', doCopyBranch], ['trash', 'Delete', doDelete]].forEach(([ic, label, fn]) => {
     const b2 = mk('button', 'chip act', svgIcon(ic) + '<span>' + label + '</span>');
@@ -645,6 +769,7 @@ function changed(){
   markTrees();
   syncCaretUI();
   scheduleMap();
+  lastText = ta.value;
   save();
 }
 
@@ -674,7 +799,7 @@ $$('#fileMenu > .panel > button').forEach(b => b.addEventListener('pointerenter'
 document.addEventListener('click', e => { menus.forEach(d => { if (d.open && !d.contains(e.target)) d.open = false; }); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') menus.forEach(d => { d.open = false; }); });
 
-/* ---------- help ---------- */
+/* ---------- settings and about dialogs ---------- */
 const settingsDlg = $('#settingsDlg');
 $('#settingsBtn').addEventListener('click', () => settingsDlg.showModal());
 $('#settingsClose').addEventListener('click', () => settingsDlg.close());
@@ -685,7 +810,18 @@ $('#aboutClose').addEventListener('click', () => aboutDlg.close());
 aboutDlg.addEventListener('click', e => { if (e.target === aboutDlg) aboutDlg.close(); });
 
 /* ---------- file menu ---------- */
-function sampleText(){ return C.renderItems(C.sampleItems(), SET).lines.join('\n'); }
+function exampleText(id){
+  const items = C.exampleItems(id);
+  items.forEach(x => { if (x.text === 'TBD') x.text = fill; });
+  return C.renderDoc(C.convertTokens(items), SET).lines.join('\n');
+}
+const sampleText = () => exampleText('ideas');
+function loadExample(id){
+  setValue(exampleText(id));
+  ta.setSelectionRange(0, 0); ta.scrollTop = 0;
+  treeSel = -1;
+  changed();
+}
 function need(m){ if (m.clean.length) return true; toast('Nothing to export yet'); return false; }
 function exportSVG(){ return C.buildSVG(model().roots, PAL.light, {ghost: fill}); }
 
@@ -723,9 +859,12 @@ addEventListener('afterprint', () => { $('#printOut').replaceChildren(); });
 const actions = {
   open(){ $('#fileInput').click(); },
   new(){ setValue(''); ta.setSelectionRange(0, 0); changed(); },
-  example(){ setValue(sampleText()); ta.setSelectionRange(0, 0); changed(); },
+  'ex-debug'(){ loadExample('debug'); },
+  'ex-flow'(){ loadExample('flow'); },
+  'ex-ideas'(){ loadExample('ideas'); },
   'copy-tree'(){ const m = model(); if (need(m)) copyText(C.toTree(m.clean, SET), 'Tree'); },
   'copy-md'(){ const m = model(); if (need(m)) copyText(C.toMarkdown(m.roots), 'Markdown'); },
+  'copy-graph'(){ const m = model(); if (need(m)) copyText(C.toMermaidGraph(m.roots), 'Mermaid graph'); },
   'copy-mermaid'(){ const m = model(); if (need(m)) copyText(C.toMermaid(m.roots), 'Mermaid'); },
   'dl-txt'(){ const m = model(); if (need(m)) download(C.slug(m.roots) + '.txt', C.toTree(m.clean, SET) + '\n', 'text/plain'); },
   'dl-opml'(){ const m = model(); if (need(m)) download(C.slug(m.roots) + '.opml', C.toOPML(m.roots, m.roots[0].text), 'text/x-opml'); },
@@ -744,7 +883,7 @@ $('#fileInput').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
   const t = await f.text(); e.target.value = '';
   setValue(t.replace(/\r\n?/g, '\n'));
-  normalize(true);
+  normalize(true, true);
   ta.setSelectionRange(0, 0); ta.scrollTop = 0;
   changed();
 });
@@ -754,13 +893,13 @@ $('#fileInput').addEventListener('change', async e => {
   const saved = loadSaved() || {};
   theme = THEMES.some(t => t[0] === saved.theme) ? saved.theme : 'system';
   font = FONTS.some(f => f[0] === saved.font) ? saved.font : 'system';
-  fill = typeof saved.fill === 'string' ? saved.fill : 'TBD';
+  fill = typeof saved.fill === 'string' && saved.fill.trim() ? saved.fill.trim() : 'TBD';
   $('#fillInput').value = fill;
   view = saved.view === 'map' ? 'map' : 'text';
   applyTheme();
   applyFont();
   ta.value = typeof saved.text === 'string' ? saved.text : sampleText();
-  normalize(false);
+  normalize(false, true);
   setView(view);
   changed();
   if (matchMedia('(pointer:fine)').matches && view !== 'map'){

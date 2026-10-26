@@ -18,7 +18,14 @@
     <div class="panel">
       <button data-act="open">Upload…</button>
       <button data-act="new">New</button>
-      <button data-act="example">Load example</button>
+      <details class="sub">
+        <summary>Load example</summary>
+        <div class="panel flyout">
+          <button data-act="ex-debug">Debugging notes</button>
+          <button data-act="ex-flow">App screen flow</button>
+          <button data-act="ex-ideas">Idea board</button>
+        </div>
+      </details>
       <hr>
       <details class="sub">
         <summary>Copy</summary>
@@ -26,6 +33,7 @@
           <button data-act="copy-tree">Tree as text</button>
           <button data-act="copy-md">Markdown list</button>
           <button data-act="copy-mermaid">Mermaid mindmap</button>
+          <button data-act="copy-graph">Mermaid graph (with links)</button>
         </div>
       </details>
       <details class="sub">
@@ -45,33 +53,31 @@
     </div>
   </details>
   <button class="tbtn" id="aboutBtn" type="button">About</button>
+  <span class="vsep"></span>
+  <div class="tools" id="actions" role="toolbar" aria-label="Actions">
+    <span class="txt-only">
+      <button class="ib" data-op="outdent" data-icon="outdent" title="Outdent (Shift+Tab)" aria-label="Outdent"></button>
+      <button class="ib" data-op="indent" data-icon="indent" title="Indent (Tab)" aria-label="Indent"></button>
+      <span class="vsep"></span>
+      <button class="ib" data-op="up" data-icon="up" title="Move up (Alt+↑)" aria-label="Move up"></button>
+      <button class="ib" data-op="down" data-icon="down" title="Move down (Alt+↓)" aria-label="Move down"></button>
+      <span class="vsep"></span>
+      <button class="ib" data-op="sibling" data-icon="sibling" title="Add sibling (Enter)" aria-label="Add sibling"></button>
+      <button class="ib" data-op="child" data-icon="child" title="Add child (Ctrl+Enter)" aria-label="Add child"></button>
+      <button class="ib" data-op="delete" data-icon="trash" title="Delete branch" aria-label="Delete branch"></button>
+      <span class="vsep"></span>
+    </span>
+    <button class="ib" data-op="link" data-icon="at" title="Link this line to another: click here, then click the line (Shift for dashed)" aria-label="Link to another line"></button>
+    <span class="vsep"></span>
+    <button class="ib" data-op="undo" data-icon="undo" title="Undo" aria-label="Undo"></button>
+    <button class="ib" data-op="redo" data-icon="redo" title="Redo" aria-label="Redo"></button>
+  </div>
   <div class="spacer"></div>
-  <button class="ib" id="settingsBtn" type="button" title="Settings" aria-label="Settings"><svg class="i" viewBox="0 0 24 24" id="settingsIcon"></svg></button>
-</header>
-
-<div class="actions" id="actions" role="toolbar" aria-label="Actions">
-  <span class="txt-only">
-    <button class="ib" data-op="outdent" data-icon="outdent" title="Outdent (Shift+Tab)" aria-label="Outdent"></button>
-    <button class="ib" data-op="indent" data-icon="indent" title="Indent (Tab)" aria-label="Indent"></button>
-    <span class="vsep"></span>
-    <button class="ib" data-op="up" data-icon="up" title="Move up (Alt+↑)" aria-label="Move up"></button>
-    <button class="ib" data-op="down" data-icon="down" title="Move down (Alt+↓)" aria-label="Move down"></button>
-    <span class="vsep"></span>
-    <button class="ib" data-op="sibling" data-icon="sibling" title="Add sibling (Enter)" aria-label="Add sibling"></button>
-    <button class="ib" data-op="child" data-icon="child" title="Add child (Ctrl+Enter)" aria-label="Add child"></button>
-    <button class="ib" data-op="delete" data-icon="trash" title="Delete branch" aria-label="Delete branch"></button>
-    <span class="vsep"></span>
-  </span>
-  <button class="ib" data-op="undo" data-icon="undo" title="Undo" aria-label="Undo"></button>
-  <button class="ib" data-op="redo" data-icon="redo" title="Redo" aria-label="Redo"></button>
-  <span class="grow"></span>
-  <span class="tree-ind" id="treeInd" hidden></span>
-  <span class="stats" id="stats"></span>
   <div class="views" id="viewSeg" role="group" aria-label="View">
     <button class="ib" data-view="text" data-icon="text" title="Text" aria-label="Text view" aria-pressed="false"></button>
     <button class="ib" data-view="map" data-icon="map" title="Map" aria-label="Map view" aria-pressed="false"></button>
   </div>
-</div>
+</header>
 
 <main class="panes">
   <section class="pane pane-text" id="paneText">
@@ -96,6 +102,14 @@
   </section>
 </main>
 
+<footer class="statusbar">
+  <span class="tree-ind" id="treeInd" hidden></span>
+  <span class="stats" id="stats"></span>
+  <span class="linkhint" id="linkHint" hidden>Click the line to link to · Shift for dashed · Esc to cancel</span>
+  <div class="spacer"></div>
+  <button class="ib sm" id="settingsBtn" type="button" title="Settings" aria-label="Settings"><svg class="i" viewBox="0 0 24 24" id="settingsIcon"></svg></button>
+</footer>
+
 <dialog id="settingsDlg" aria-labelledby="settingsTitle">
   <button class="ib close" id="settingsClose" type="button" data-icon="close" title="Close" aria-label="Close"></button>
   <h2 id="settingsTitle">Settings</h2>
@@ -105,7 +119,7 @@
   <div class="seg" id="fontSeg" role="group" aria-label="Font"></div>
   <div class="label">Empty cell text</div>
   <input id="fillInput" type="text" maxlength="24" placeholder="TBD" autocomplete="off" spellcheck="false" aria-label="Empty cell text">
-  <p class="hint">Written into the gap when you skip an indent level.</p>
+  <p class="hint">Fills the gap when an indent skips a level, in the editor, on paste and in the right-click levels.</p>
 </dialog>
 
 <dialog id="aboutDlg" aria-labelledby="aboutTitle">
@@ -113,22 +127,31 @@
   <div class="hero">
     <div class="logo" aria-hidden="true">├─</div>
     <h2 id="aboutTitle">twig</h2>
-    <p class="desc">Text first mind mapping. Indent to build a mind map, a tree, a data set, or whatever you are thinking through.</p>
+    <p class="desc">Text first mind mapping. Indent to build, link to connect.</p>
     <p class="meta">
       <span>Made by <a href="https://hiran.in" target="_blank" rel="noopener">Hiran Venugopalan</a></span>
       <a href="https://github.com/hfactor/twig" target="_blank" rel="noopener">GitHub</a>
       <a href="https://github.com/hfactor/twig/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
     </p>
   </div>
-  <dl class="keys">
-    <dt><kbd>Tab</kbd></dt><dd>Indent</dd>
-    <dt><kbd>Shift</kbd> <kbd>Tab</kbd></dt><dd>Outdent</dd>
-    <dt><kbd>Enter</kbd></dt><dd>New sibling, or new tree at top level</dd>
-    <dt><kbd>Ctrl</kbd> <kbd>Enter</kbd></dt><dd>New child</dd>
-    <dt><kbd>Alt</kbd> <kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Move branch</dd>
-    <dt><kbd>Esc</kbd> <kbd>Tab</kbd></dt><dd>Leave the editor</dd>
-    <dt><kbd>Right-click</kbd></dt><dd>More actions</dd>
-  </dl>
+  <div class="keys">
+    <h3>Build</h3>
+    <dl>
+      <dt><kbd>Tab</kbd></dt><dd>Indent</dd>
+      <dt><kbd>Shift</kbd> <kbd>Tab</kbd></dt><dd>Outdent</dd>
+      <dt><kbd>Enter</kbd></dt><dd>New sibling, or new tree at top level</dd>
+      <dt><kbd>Ctrl</kbd> <kbd>Enter</kbd></dt><dd>New child</dd>
+      <dt><kbd>Alt</kbd> <kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Move branch</dd>
+      <dt><kbd>Esc</kbd> <kbd>Tab</kbd></dt><dd>Leave the editor</dd>
+    </dl>
+    <h3>Connect</h3>
+    <dl>
+      <dt><kbd>@</kbd></dt><dd>Toolbar button: click it, then click the line to link to</dd>
+      <dt><kbd>@12</kbd></dt><dd>Or end a line with this and a space to link it to line 12</dd>
+      <dt><kbd>@@12</kbd></dt><dd>Same, but dashed (indirect)</dd>
+      <dt><kbd>Right-click</kbd></dt><dd>Remove a link, or move and copy a branch</dd>
+    </dl>
+  </div>
 </dialog>
 
 <div class="ctx" id="ctx" role="menu" hidden></div>
@@ -137,6 +160,7 @@
 <input type="file" id="fileInput" accept=".txt,.md,.text,text/plain" hidden>
 
 <script src="src/core.js"></script>
+<script src="src/examples.js"></script>
 <script src="src/app.js"></script>
 </body>
 </html>
