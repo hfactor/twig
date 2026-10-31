@@ -21,6 +21,7 @@
       <details class="sub">
         <summary>Load example</summary>
         <div class="panel flyout">
+          <button data-act="ex-hello">Hello from Twig</button>
           <button data-act="ex-debug">Debugging notes</button>
           <button data-act="ex-flow">App screen flow</button>
           <button data-act="ex-ideas">Idea board</button>
@@ -109,6 +110,11 @@
   <div class="spacer"></div>
   <button class="ib sm" id="settingsBtn" type="button" title="Settings" aria-label="Settings"><svg class="i" viewBox="0 0 24 24" id="settingsIcon"></svg></button>
 </footer>
+
+<nav class="welcome" id="welcome" aria-label="Welcome note" hidden>
+  <button id="welcomeClear" type="button">Clear</button>
+  <a href="https://hiran.in" target="_blank" rel="noopener">hiran.in</a>
+</nav>
 
 <dialog id="settingsDlg" aria-labelledby="settingsTitle">
   <button class="ib close" id="settingsClose" type="button" data-icon="close" title="Close" aria-label="Close"></button>

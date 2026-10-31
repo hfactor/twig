@@ -761,6 +761,15 @@ function setView(v){
 $('#viewSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setView(b.dataset.view); });
 addEventListener('resize', () => { if (view === 'map') applyZoom(); });
 
+/* The welcome note has two buttons (Clear, hiran.in). They show only while the text is still exactly that note. */
+const welcomeBar = $('#welcome');
+let helloCache = {fill: null, text: ''};
+function helloText(){
+  if (helloCache.fill !== fill) helloCache = {fill, text: exampleText('hello')};
+  return helloCache.text;
+}
+$('#welcomeClear').addEventListener('click', () => { actions.new(); ta.focus(); });
+
 function changed(){
   const clean = C.cleanItems(parse(ta.value));
   const levels = clean.reduce((m, x) => Math.max(m, x.depth + 1), 0);
@@ -770,6 +779,7 @@ function changed(){
   syncCaretUI();
   scheduleMap();
   lastText = ta.value;
+  welcomeBar.hidden = ta.value !== helloText();
   save();
 }
 
@@ -815,7 +825,7 @@ function exampleText(id){
   items.forEach(x => { if (x.text === 'TBD') x.text = fill; });
   return C.renderDoc(C.convertTokens(items), SET).lines.join('\n');
 }
-const sampleText = () => exampleText('ideas');
+const sampleText = () => exampleText('hello');
 function loadExample(id){
   setValue(exampleText(id));
   ta.setSelectionRange(0, 0); ta.scrollTop = 0;
@@ -859,6 +869,7 @@ addEventListener('afterprint', () => { $('#printOut').replaceChildren(); });
 const actions = {
   open(){ $('#fileInput').click(); },
   new(){ setValue(''); ta.setSelectionRange(0, 0); changed(); },
+  'ex-hello'(){ loadExample('hello'); },
   'ex-debug'(){ loadExample('debug'); },
   'ex-flow'(){ loadExample('flow'); },
   'ex-ideas'(){ loadExample('ideas'); },

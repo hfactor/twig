@@ -12,7 +12,7 @@ Open `index.html` in a browser, or build one portable file:
 npm run build   # writes dist/twig.html (about 100 KB)
 ```
 
-File → Load example has three starting points: debugging notes, an app screen flow and an idea board (three linked trees).
+The first thing you see is a short note about Twig, written in Twig. File → Load example also has debugging notes, an app screen flow and an idea board (three linked trees).
 
 ## What it does
 

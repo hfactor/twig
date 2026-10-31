@@ -118,6 +118,13 @@ body[data-view="text"] .pane-map{display:none}
 body[data-view="map"] .pane-text{position:absolute;left:-10000px;top:0;width:640px;height:320px;pointer-events:none}
 body[data-view="map"] .txt-only{display:none}
 
+.welcome{position:fixed;left:50%;bottom:calc(44px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:30;
+  display:flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--line);border-radius:99px;background:var(--surface);opacity:.9}
+.welcome[hidden]{display:none}
+.welcome button,.welcome a{padding:4px 13px;border:0;border-radius:99px;background:transparent;color:var(--muted);font-size:12px;text-decoration:none;cursor:pointer}
+.welcome button:hover,.welcome a:hover{background:var(--hover);color:var(--ink)}
+.welcome button+a{border-left:1px solid var(--line);border-radius:0 99px 99px 0}
+.welcome button{border-radius:99px 0 0 99px}
 .editor{position:relative;flex:1;min-height:0;display:flex;background:var(--surface)}
 .linehl{position:absolute;left:0;right:0;top:0;height:24px;background:var(--cur);pointer-events:none;will-change:transform;box-shadow:inset 3px 0 0 var(--accent)}
 .gutter{position:relative;flex:none;min-width:5.6em;margin:0;padding:16px 12px 48px 14px;overflow:hidden;user-select:none;

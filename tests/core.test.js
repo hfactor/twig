@@ -158,7 +158,7 @@ test('every example loads, every link resolves, and the art reads back', () => {
     }));
     const items = C.convertTokens(C.exampleItems(ex.id));
     const text = C.renderDoc(items, SET).lines.join('\n');
-    assert.ok(!text.includes('@'), ex.name + ' has an unresolved link');
+    assert.ok(!/@@?\d/.test(text), ex.name + ' has an unresolved link');
     const back = C.parseDoc(text);
     assert.strictEqual(C.collectLinks(back).length, wanted, ex.name + ' link count');
     assert.strictEqual(back.length, ex.lines.length);

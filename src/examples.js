@@ -6,6 +6,28 @@
 const C = root.Core || require('./core.js');
 
 const EXAMPLES = [
+  /* The note you see on first open: the author saying hello, written in Twig. It also shows a link and a placeholder. */
+  {id: 'hello', name: 'Hello from Twig', lines: [
+    [0, 'Hi, I am Hiran. This is Twig.'],
+    [1, 'Why I built it'],
+    [2, 'First, pen and paper to think. Or a text editor.'],
+    [2, 'I would type, indent, and picture the tree'],
+    [2, 'This makes picturing easier, as it is drawn'],
+    [1, 'How'],
+    [2, 'Text editors were my generation\'s first project'],
+    [2, 'So I asked an AI to help. It did. I am unbearable now'],
+    [1, 'What you can do'],
+    [2, 'Outlines, drafts, slides, screenplays'],
+    [2, 'Everything is a tree if you squint'],
+    [2, 'Add a line in the middle and it tidies itself'],
+    [1, 'The link bit'],
+    [2, 'Press @, click another line, and they are linked'],
+    [2, 'Like this row', 'Everything is a tree if you squint'],
+    [2, 'Not sure this works for everyone. Tell me'],
+    [3, 'Or at all. Honestly'],
+    [1, 'What is next'],
+    [2, 'TBD']]},
+
   /* Pattern: investigation notes. Checks point at the suspect they test, findings at the fix, and "still slow?" loops back. */
   {id: 'debug', name: 'Debugging notes', lines: [
     [0, 'Checkout is slow on mobile'],
