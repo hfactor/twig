@@ -53,7 +53,7 @@ let saveTimer;
 function save(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    try { localStorage.setItem(KEY, JSON.stringify({text: ta.value, view, theme, font, fill})); } catch (e) {}
+    try { localStorage.setItem(KEY, JSON.stringify({text: ta.value, sample: sampleId, view, theme, font, fill})); } catch (e) {}
   }, 250);
 }
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
@@ -425,7 +425,7 @@ ta.addEventListener('input', e => {
 ta.addEventListener('compositionstart', () => { composing = true; });
 ta.addEventListener('compositionend', () => { composing = false; normalize(false, false, rawShifts(lastText, ta.value)); changed(); });
 ta.addEventListener('blur', () => { leaveOnTab = false; if (!composing && ta.value.indexOf('@') >= 0){ normalize(false, true); changed(); } });
-ta.addEventListener('scroll', () => { gutter.scrollTop = ta.scrollTop; placeHighlight(); });
+ta.addEventListener('scroll', () => { gutter.scrollTop = ta.scrollTop; placeHighlight(); placeWelcome(); });
 ['keyup', 'pointerup', 'focus'].forEach(ev => ta.addEventListener(ev, () => syncCaretUI()));
 document.addEventListener('selectionchange', () => { if (document.activeElement === ta) syncCaretUI(); });
 
@@ -761,14 +761,17 @@ function setView(v){
 $('#viewSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setView(b.dataset.view); });
 addEventListener('resize', () => { if (view === 'map') applyZoom(); });
 
-/* The welcome note has two buttons (Clear, hiran.in). They show only while the text is still exactly that note. */
-const welcomeBar = $('#welcome');
-let helloCache = {fill: null, text: ''};
-function helloText(){
-  if (helloCache.fill !== fill) helloCache = {fill, text: exampleText('hello')};
-  return helloCache.text;
+/* The welcome note has one button, Clear, drawn on the line after the last one. It shows while the document is still that untouched note.
+   sampleId remembers which example the text came from, until the first edit. */
+let sampleId = null;
+const welcomeBtn = $('#welcomeClear');
+function placeWelcome(){
+  welcomeBtn.hidden = sampleId !== 'hello';
+  if (welcomeBtn.hidden) return;
+  const n = ta.value.split('\n').length;
+  welcomeBtn.style.transform = 'translate(' + (gutter.offsetWidth + 14) + 'px,' + (PAD + n * LH - ta.scrollTop) + 'px)';
 }
-$('#welcomeClear').addEventListener('click', () => { actions.new(); ta.focus(); });
+welcomeBtn.addEventListener('click', () => { actions.new(); ta.focus(); });
 
 function changed(){
   const clean = C.cleanItems(parse(ta.value));
@@ -779,7 +782,8 @@ function changed(){
   syncCaretUI();
   scheduleMap();
   lastText = ta.value;
-  welcomeBar.hidden = ta.value !== helloText();
+  if (sampleId && ta.value !== exampleText(sampleId)) sampleId = null;
+  placeWelcome();
   save();
 }
 
@@ -825,8 +829,8 @@ function exampleText(id){
   items.forEach(x => { if (x.text === 'TBD') x.text = fill; });
   return C.renderDoc(C.convertTokens(items), SET).lines.join('\n');
 }
-const sampleText = () => exampleText('hello');
 function loadExample(id){
+  sampleId = id;
   setValue(exampleText(id));
   ta.setSelectionRange(0, 0); ta.scrollTop = 0;
   treeSel = -1;
@@ -868,7 +872,7 @@ addEventListener('afterprint', () => { $('#printOut').replaceChildren(); });
 
 const actions = {
   open(){ $('#fileInput').click(); },
-  new(){ setValue(''); ta.setSelectionRange(0, 0); changed(); },
+  new(){ sampleId = null; setValue(''); ta.setSelectionRange(0, 0); changed(); },
   'ex-hello'(){ loadExample('hello'); },
   'ex-debug'(){ loadExample('debug'); },
   'ex-flow'(){ loadExample('flow'); },
@@ -909,7 +913,10 @@ $('#fileInput').addEventListener('change', async e => {
   view = saved.view === 'map' ? 'map' : 'text';
   applyTheme();
   applyFont();
-  ta.value = typeof saved.text === 'string' ? saved.text : sampleText();
+  /* an untouched example is rebuilt from the current examples, so it never goes stale */
+  const hadText = typeof saved.text === 'string';
+  sampleId = hadText ? (saved.sample || null) : 'hello';
+  ta.value = sampleId ? exampleText(sampleId) : (hadText ? saved.text : '');
   normalize(false, true);
   setView(view);
   changed();

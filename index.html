@@ -86,6 +86,7 @@
       <div class="linehl" id="lineHl"></div>
       <div class="gutter" id="gutter" aria-hidden="true"></div>
       <textarea id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off" aria-label="Tree outline"></textarea>
+      <button class="welcome-btn" id="welcomeClear" type="button" hidden>Clear</button>
     </div>
   </section>
   <section class="pane pane-map" id="paneMap">
@@ -110,11 +111,6 @@
   <div class="spacer"></div>
   <button class="ib sm" id="settingsBtn" type="button" title="Settings" aria-label="Settings"><svg class="i" viewBox="0 0 24 24" id="settingsIcon"></svg></button>
 </footer>
-
-<nav class="welcome" id="welcome" aria-label="Welcome note" hidden>
-  <button id="welcomeClear" type="button">Clear</button>
-  <a href="https://hiran.in" target="_blank" rel="noopener">hiran.in</a>
-</nav>
 
 <dialog id="settingsDlg" aria-labelledby="settingsTitle">
   <button class="ib close" id="settingsClose" type="button" data-icon="close" title="Close" aria-label="Close"></button>

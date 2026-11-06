@@ -8,14 +8,11 @@ const C = root.Core || require('./core.js');
 const EXAMPLES = [
   /* The note you see on first open: the author saying hello, written in Twig. It also shows a link and a placeholder. */
   {id: 'hello', name: 'Hello from Twig', lines: [
-    [0, 'Hi, I am Hiran. This is Twig.'],
+    [0, 'Hi, I am Hiran and this is Twig.'],
     [1, 'Why I built it'],
     [2, 'First, pen and paper to think. Or a text editor.'],
     [2, 'I would type, indent, and picture the tree'],
     [2, 'This makes picturing easier, as it is drawn'],
-    [1, 'How'],
-    [2, 'Text editors were my generation\'s first project'],
-    [2, 'So I asked an AI to help. It did. I am unbearable now'],
     [1, 'What you can do'],
     [2, 'Outlines, drafts, slides, screenplays'],
     [2, 'Everything is a tree if you squint'],
