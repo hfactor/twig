@@ -91,6 +91,29 @@ dialog#aboutDlg::backdrop{background:rgba(0,0,0,.4)}
 #aboutDlg dd{margin:0;color:var(--muted)}
 #aboutDlg kbd{font:600 11px var(--mono);padding:2px 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;background:var(--paper);color:var(--ink)}
 
+/* document tabs */
+.tabs{display:flex;align-items:flex-end;gap:2px;padding:4px max(10px,env(safe-area-inset-left)) 0;background:var(--paper);border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{display:flex;align-items:center;flex:none;max-width:210px;border:1px solid transparent;border-bottom:0;border-radius:8px 8px 0 0;margin-bottom:-1px}
+.tab.on{background:var(--surface);border-color:var(--line)}
+.tab-label{min-width:0;max-width:170px;padding:6px 4px 6px 11px;border:0;background:transparent;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tab.on .tab-label{color:var(--ink);font-weight:600}
+.tab-x,.tab-add{display:grid;place-items:center;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--muted)}
+.tab-x{margin-right:5px}
+.tab-x:hover,.tab-add:hover{background:var(--hover);color:var(--ink)}
+.tab-add{flex:none;margin:0 0 4px 4px}
+.tab-x svg,.tab-add svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+dialog#lossDlg{width:min(400px,calc(100vw - 24px));padding:22px 24px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.35);font-size:13px}
+dialog#lossDlg::backdrop{background:rgba(0,0,0,.4)}
+#lossDlg h2{margin:0 0 8px;font-size:17px;font-weight:600}
+#lossDlg p{margin:0 0 18px;color:var(--muted);line-height:1.5}
+.dlg-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dlg-actions button{padding:7px 14px;border:1px solid var(--line);border-radius:8px;background:transparent;font-size:13px}
+.dlg-actions button:hover{background:var(--hover)}
+.dlg-actions .solid{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.dlg-actions .solid:hover{filter:brightness(1.08)}
+
 /* tool buttons */
 .ib{width:34px;height:34px;display:grid;place-items:center;border:1px solid transparent;border-radius:8px;background:transparent;padding:0}
 .ib:hover{background:var(--hover)}

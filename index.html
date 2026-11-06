@@ -17,7 +17,9 @@
     <summary>File</summary>
     <div class="panel">
       <button data-act="open">Upload…</button>
-      <button data-act="new">New</button>
+      <button data-act="new">New tab</button>
+      <button data-act="clear">Clear</button>
+      <button data-act="close">Close tab</button>
       <details class="sub">
         <summary>Load example</summary>
         <div class="panel flyout">
@@ -80,6 +82,8 @@
   </div>
 </header>
 
+<div class="tabs" id="tabs" role="tablist" aria-label="Documents"></div>
+
 <main class="panes">
   <section class="pane pane-text">
     <div class="editor">
@@ -114,6 +118,17 @@
   <a class="tbtn feedback" href="https://github.com/hfactor/twig/issues" target="_blank" rel="noopener" title="Suggest a feature or report a problem on GitHub">Feedback</a>
   <button class="ib sm" id="settingsBtn" type="button" title="Settings" aria-label="Settings"><svg class="i" viewBox="0 0 24 24" id="settingsIcon"></svg></button>
 </footer>
+
+<dialog id="lossDlg" aria-labelledby="lossTitle">
+  <h2 id="lossTitle"></h2>
+  <p>Twig keeps your documents only in this browser, nothing is stored online. If you want to keep this one, download a copy first.</p>
+  <div class="dlg-actions">
+    <button class="plain" id="lossDownload" type="button">Download a copy</button>
+    <span class="spacer"></span>
+    <button class="plain" id="lossCancel" type="button">Cancel</button>
+    <button class="solid" id="lossGo" type="button">Close tab</button>
+  </div>
+</dialog>
 
 <dialog id="settingsDlg" aria-labelledby="settingsTitle">
   <button class="ib close" id="settingsClose" type="button" data-icon="close" title="Close" aria-label="Close"></button>

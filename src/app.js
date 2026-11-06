@@ -4,7 +4,7 @@ const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 const ta = $('#editor'), gutter = $('#gutter'), hl = $('#lineHl'), host = $('#mapHost'), wrap = $('#mapWrap');
 const toastEl = $('#toast'), ctx = $('#ctx');
-const KEY = 'twig.v2';
+const KEY = 'twig.v3', OLD_KEY = 'twig.v2';
 const THEMES = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark'], ['blue', 'Tokyo Night']];
 /* Monospace only: the map sizes its boxes from a fixed character width. Web fonts load from Google Fonts only once chosen. */
 const SYS_MONO = "ui-monospace,'Cascadia Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace";
@@ -48,12 +48,20 @@ let treeSel = -1;
 let zoomMode = 'fit', zoom = 1, mapSize = {w: 1, h: 1}, raf = 0, lastActive = -2, curRange = [-1, -1];
 
 /* ---------- storage and settings ---------- */
-function loadSaved(){ try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } }
+function loadSaved(){
+  try {
+    const v3 = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (v3) return v3;
+    const v2 = JSON.parse(localStorage.getItem(OLD_KEY) || 'null');   /* one document, from before tabs */
+    return v2 && typeof v2.text === 'string' ? Object.assign({}, v2, {docs: [{text: v2.text, sample: v2.sample || null}]}) : v2;
+  } catch (e) { return null; }
+}
 let saveTimer;
 function save(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    try { localStorage.setItem(KEY, JSON.stringify({text: ta.value, sample: sampleId, view, theme, font, fill})); } catch (e) {}
+    syncActive();
+    try { localStorage.setItem(KEY, JSON.stringify({docs: docs.map(d => ({id: d.id, text: d.text, sample: d.sample})), active, view, theme, font, fill})); } catch (e) {}
   }, 250);
 }
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
@@ -841,6 +849,91 @@ function setView(v){
 $('#viewSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setView(b.dataset.view); });
 addEventListener('resize', () => { if (view === 'map') applyZoom(); });
 
+/* ---------- documents: one tab each ---------- */
+/* Documents live only in this browser. New opens a blank tab; Clear and Close ask first when there is real work in the tab. */
+let docs = [], active = 0, nextId = 1;
+const newBlank = () => ({id: nextId++, text: '', sample: null, title: ''});
+const isDisposable = d => !d.text.trim() || !!d.sample;   /* empty, or still an untouched example */
+function syncActive(){ const d = docs[active]; if (d){ d.text = ta.value; d.sample = sampleId; } }
+function docTitle(clean){ const t = clean.length ? clean[0].text : ''; return t ? (t.length > 22 ? t.slice(0, 21) + '…' : t) : 'Untitled'; }
+function titleOf(text){ return docTitle(C.cleanItems(C.parseDoc(text, {fill}))); }
+function renderTabs(){
+  const bar = $('#tabs');
+  bar.replaceChildren();
+  docs.forEach((d, k) => {
+    const tab = mk('div', 'tab' + (k === active ? ' on' : ''));
+    tab.setAttribute('role', 'tab'); tab.setAttribute('aria-selected', String(k === active));
+    const label = mk('button', 'tab-label'); label.type = 'button'; label.textContent = d.title || 'Untitled';
+    label.addEventListener('click', () => { if (k !== active) activate(k); });
+    const x = mk('button', 'tab-x', svgIcon('close')); x.type = 'button'; x.title = 'Close tab'; x.setAttribute('aria-label', 'Close ' + (d.title || 'Untitled'));
+    x.addEventListener('click', e => { e.stopPropagation(); closeDoc(k); });
+    tab.append(label, x);
+    bar.appendChild(tab);
+  });
+  const add = mk('button', 'tab-add', svgIcon('sibling')); add.type = 'button'; add.title = 'New tab'; add.setAttribute('aria-label', 'New tab');
+  add.addEventListener('click', () => newDoc());
+  bar.appendChild(add);
+  const on = bar.querySelector('.tab.on'); if (on && on.scrollIntoView) on.scrollIntoView({block: 'nearest', inline: 'nearest'});
+}
+/* Show document k in the editor. opts: {text, sample, imp} replaces its content first.
+   leaving: true when the editor still shows a document that was just closed, so its text is not saved into another one. */
+function activate(k, opts, leaving){
+  if (!leaving) syncActive();
+  const d = docs[k];
+  if (opts){ if ('text' in opts) d.text = opts.text; if ('sample' in opts) d.sample = opts.sample; }
+  active = k; sampleId = d.sample;
+  cancelLink(); treeSel = -1; mapFocus = -1;
+  ta.value = d.sample ? exampleText(d.sample) : d.text;
+  if (opts && opts.imp) normalize(true, true);
+  ta.setSelectionRange(0, 0); ta.scrollTop = 0;
+  changed();
+  renderTabs();
+  if (matchMedia('(pointer:fine)').matches && view !== 'map') ta.focus();
+}
+function newDoc(text, opts){ docs.push(newBlank()); activate(docs.length - 1, Object.assign({text: text || ''}, opts)); }
+/* Put new content in this tab if it holds nothing worth keeping, otherwise in a new tab. */
+function openDoc(text, opts){
+  syncActive();
+  if (isDisposable(docs[active])) activate(active, Object.assign({text}, opts));
+  else newDoc(text, opts);
+}
+function docDownload(d){
+  const clean = C.cleanItems(C.parseDoc(d.text, {fill}));
+  if (!clean.length){ toast('Nothing to download'); return; }
+  download(C.slug(C.buildTree(clean)) + '.txt', C.toTree(clean, SET) + '\n', 'text/plain');
+}
+const lossDlg = $('#lossDlg');
+let lossRun = null, lossDoc = null;
+function confirmLoss(doc, title, go, run){
+  lossDoc = doc; lossRun = run;
+  $('#lossTitle').textContent = title; $('#lossGo').textContent = go;
+  lossDlg.showModal();
+}
+$('#lossDownload').addEventListener('click', () => docDownload(lossDoc));
+$('#lossCancel').addEventListener('click', () => lossDlg.close());
+$('#lossGo').addEventListener('click', () => { lossDlg.close(); if (lossRun) lossRun(); });
+function closeDoc(k){
+  syncActive();
+  const d = docs[k];
+  const remove = () => {
+    const wasActive = k === active;
+    docs.splice(k, 1);
+    if (!docs.length) docs.push(newBlank());
+    if (k < active) active--;
+    else if (wasActive) active = Math.min(k, docs.length - 1);
+    activate(active, undefined, wasActive);
+  };
+  if (isDisposable(d)) remove();
+  else confirmLoss(d, 'Close “' + (d.title || 'Untitled') + '”?', 'Close tab', remove);
+}
+function clearDoc(){
+  syncActive();
+  const d = docs[active];
+  const clear = () => activate(active, {text: '', sample: null});
+  if (isDisposable(d)) clear();
+  else confirmLoss(d, 'Clear “' + (d.title || 'Untitled') + '”?', 'Clear', clear);
+}
+
 /* The welcome note has one button, Clear, drawn on the line after the last one. It shows while the document is still that untouched note.
    sampleId remembers which example the text came from, until the first edit. */
 let sampleId = null;
@@ -851,7 +944,7 @@ function placeWelcome(){
   const n = ta.value.split('\n').length;
   welcomeBtn.style.transform = 'translate(' + (gutter.offsetWidth + 14) + 'px,' + (PAD + n * LH - ta.scrollTop) + 'px)';
 }
-welcomeBtn.addEventListener('click', () => { actions.new(); ta.focus(); });
+welcomeBtn.addEventListener('click', () => { clearDoc(); ta.focus(); });
 
 function changed(){
   const clean = C.cleanItems(parse(ta.value));
@@ -864,6 +957,9 @@ function changed(){
   lastText = ta.value;
   if (sampleId && ta.value !== exampleText(sampleId)) sampleId = null;
   placeWelcome();
+  syncActive();
+  const title = docTitle(clean);
+  if (docs[active] && docs[active].title !== title){ docs[active].title = title; renderTabs(); }
   save();
 }
 
@@ -909,13 +1005,7 @@ function exampleText(id){
   items.forEach(x => { if (x.text === 'TBD') x.text = fill; });
   return C.renderDoc(C.convertTokens(items), SET).lines.join('\n');
 }
-function loadExample(id){
-  sampleId = id;
-  setValue(exampleText(id));
-  ta.setSelectionRange(0, 0); ta.scrollTop = 0;
-  treeSel = -1;
-  changed();
-}
+function loadExample(id){ openDoc('', {sample: id}); }
 function need(m){ if (m.clean.length) return true; toast('Nothing to export yet'); return false; }
 function exportSVG(){ return C.buildSVG(model().roots, PAL.light, {ghost: fill}); }
 
@@ -952,7 +1042,9 @@ addEventListener('afterprint', () => { $('#printOut').replaceChildren(); });
 
 const actions = {
   open(){ $('#fileInput').click(); },
-  new(){ sampleId = null; setValue(''); ta.setSelectionRange(0, 0); changed(); },
+  new(){ newDoc(); },
+  clear(){ clearDoc(); },
+  close(){ closeDoc(active); },
   'ex-hello'(){ loadExample('hello'); },
   'ex-debug'(){ loadExample('debug'); },
   'ex-flow'(){ loadExample('flow'); },
@@ -977,10 +1069,7 @@ $('#fileMenu').addEventListener('click', e => {
 $('#fileInput').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
   const t = await f.text(); e.target.value = '';
-  setValue(t.replace(/\r\n?/g, '\n'));
-  normalize(true, true);
-  ta.setSelectionRange(0, 0); ta.scrollTop = 0;
-  changed();
+  openDoc(t.replace(/\r\n?/g, '\n'), {imp: true});
 });
 
 /* ---------- start ---------- */
@@ -993,13 +1082,17 @@ $('#fileInput').addEventListener('change', async e => {
   view = saved.view === 'map' ? 'map' : 'text';
   applyTheme();
   applyFont();
-  /* an untouched example is rebuilt from the current examples, so it never goes stale */
-  const hadText = typeof saved.text === 'string';
-  sampleId = hadText ? (saved.sample || null) : 'hello';
-  ta.value = sampleId ? exampleText(sampleId) : (hadText ? saved.text : '');
+  /* documents: an untouched example is rebuilt from the current examples, so it never goes stale */
+  docs = (saved.docs && saved.docs.length ? saved.docs : [{text: '', sample: 'hello'}]).map(d => ({
+    id: nextId++, text: typeof d.text === 'string' ? d.text : '', sample: d.sample || null, title: ''}));
+  docs.forEach(d => { if (d.sample) d.text = exampleText(d.sample); d.title = titleOf(d.text); });
+  active = Math.max(0, Math.min(docs.length - 1, saved.active | 0));
+  sampleId = docs[active].sample;
+  ta.value = docs[active].text;
   normalize(false, true);
   setView(view);
   changed();
+  renderTabs();
   if (matchMedia('(pointer:fine)').matches && view !== 'map'){
     ta.focus();
     ta.setSelectionRange(ta.value.length, ta.value.length);
