@@ -81,15 +81,16 @@
 </header>
 
 <main class="panes">
-  <section class="pane pane-text" id="paneText">
+  <section class="pane pane-text">
     <div class="editor">
       <div class="linehl" id="lineHl"></div>
       <div class="gutter" id="gutter" aria-hidden="true"></div>
       <textarea id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off" aria-label="Tree outline"></textarea>
+      <div class="lens" id="lens" aria-hidden="true" hidden><pre id="lensPre"></pre></div>
       <button class="welcome-btn" id="welcomeClear" type="button" hidden>Clear</button>
     </div>
   </section>
-  <section class="pane pane-map" id="paneMap">
+  <section class="pane pane-map">
     <div class="mapbox">
       <nav class="toc" id="toc" aria-label="Trees" hidden></nav>
       <div class="mapwrap" id="mapWrap" tabindex="0" aria-label="Mind map. Click a node to rename it or jump to its line."><div id="mapHost"></div></div>
@@ -107,8 +108,10 @@
 <footer class="statusbar">
   <span class="tree-ind" id="treeInd" hidden></span>
   <span class="stats" id="stats"></span>
+  <span class="linkinfo" id="linkInfo" hidden></span>
   <span class="linkhint" id="linkHint" hidden>Click the line to link to · Shift for dashed · Esc to cancel</span>
   <div class="spacer"></div>
+  <a class="tbtn feedback" href="https://github.com/hfactor/twig/issues" target="_blank" rel="noopener" title="Suggest a feature or report a problem on GitHub">Feedback</a>
   <button class="ib sm" id="settingsBtn" type="button" title="Settings" aria-label="Settings"><svg class="i" viewBox="0 0 24 24" id="settingsIcon"></svg></button>
 </footer>
 
@@ -134,12 +137,13 @@
       <span>Made by <a href="https://hiran.in" target="_blank" rel="noopener">Hiran Venugopalan</a></span>
       <a href="https://github.com/hfactor/twig" target="_blank" rel="noopener">GitHub</a>
       <a href="https://github.com/hfactor/twig/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+      <a href="https://github.com/hfactor/twig/issues" target="_blank" rel="noopener">Feedback</a>
     </p>
   </div>
   <div class="keys">
     <h3>Build</h3>
     <dl>
-      <dt><kbd>Tab</kbd></dt><dd>Indent</dd>
+      <dt><kbd>Tab</kbd></dt><dd>Indent. Press again on a first child to add a <b>TBD</b> parent</dd>
       <dt><kbd>Shift</kbd> <kbd>Tab</kbd></dt><dd>Outdent</dd>
       <dt><kbd>Enter</kbd></dt><dd>New sibling, or new tree at top level</dd>
       <dt><kbd>Ctrl</kbd> <kbd>Enter</kbd></dt><dd>New child</dd>
@@ -149,8 +153,9 @@
     <h3>Connect</h3>
     <dl>
       <dt><kbd>@</kbd></dt><dd>Toolbar button: click it, then click the line to link to</dd>
-      <dt><kbd>@12</kbd></dt><dd>Or end a line with this and a space to link it to line 12</dd>
+      <dt><kbd>@12</kbd></dt><dd>Or end a line with this and a space to link it to line 12. No line 12 yet? <b>TBD</b> lines are made</dd>
       <dt><kbd>@@12</kbd></dt><dd>Same, but dashed (indirect)</dd>
+      <dt><kbd>●</kbd> <kbd>◄</kbd></dt><dd>Where a link starts and where it ends. Links are grey; hover a line, or put the caret on it, to see its links in colour</dd>
       <dt><kbd>Right-click</kbd></dt><dd>Remove a link, or move and copy a branch</dd>
     </dl>
   </div>

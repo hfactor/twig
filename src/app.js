@@ -71,6 +71,7 @@ function segment(box, items, current, onPick){
 }
 function applyTheme(){
   document.documentElement.dataset.theme = effTheme();
+  drawLens();
   segment($('#themeSeg'), THEMES, theme, id => { theme = id; applyTheme(); lastActive = -2; renderMap(); save(); });
 }
 darkQuery.addEventListener('change', () => { if (theme === 'system'){ applyTheme(); lastActive = -2; renderMap(); } });
@@ -226,14 +227,14 @@ function normalize(imp, convert, shift){
     const extra = off - items[idx].text.length;
     if (extra > 0 && extra <= 40 && cur.charAt(ta.selectionStart - 1) === ' ') items[idx].text += ' '.repeat(extra);
   }
-  if (convert) C.convertTokens(items, {terminated: convert === 'terminated'});
+  if (convert) C.convertTokens(items, {terminated: convert === 'terminated', fill});
   if (render() === cur) return;
   commit(items, idx, off);
 }
 
 /* ---------- links: press @, click the line to link to; remove from the menu ---------- */
 let linkFrom = -1;
-const shortText = s => { const t = s.trim() || '(empty)'; return t.length > 24 ? t.slice(0, 23) + '…' : t; };
+const shortText = (s, n = 24) => { const t = s.trim() || '(empty)'; return t.length > n ? t.slice(0, n - 1) + '…' : t; };
 function startLink(){
   if (linkFrom >= 0){ cancelLink(); return; }
   linkFrom = view === 'map' ? currentLine() : state().idx;
@@ -244,6 +245,7 @@ function cancelLink(){
   linkFrom = -1;
   document.body.classList.remove('linking');
   $('#linkHint').hidden = true; $('#stats').hidden = false;
+  updateLinkInfo();
 }
 function finishLink(to, indirect){
   const from = linkFrom;
@@ -294,7 +296,11 @@ function structOp(fn){
   commit(st.items, ni + (st.idx - a), st.off);
   return true;
 }
-const doIndent  = () => structOp(C.opIndent);
+/* Tab: become a child of the line above. If already its child, go one level deeper with a placeholder parent in between. */
+function doIndent(){
+  if (structOp(C.opIndent)) return true;
+  return structOp((items, a) => a === 0 ? -1 : C.opSetLevel(items, a, items[a].depth + 1, fill));
+}
 const doOutdent = () => structOp(C.opOutdent);
 const doMove    = dir => structOp((i, a, b) => C.opMove(i, a, b, dir));
 function doDelete(){
@@ -425,7 +431,10 @@ ta.addEventListener('input', e => {
 ta.addEventListener('compositionstart', () => { composing = true; });
 ta.addEventListener('compositionend', () => { composing = false; normalize(false, false, rawShifts(lastText, ta.value)); changed(); });
 ta.addEventListener('blur', () => { leaveOnTab = false; if (!composing && ta.value.indexOf('@') >= 0){ normalize(false, true); changed(); } });
-ta.addEventListener('scroll', () => { gutter.scrollTop = ta.scrollTop; placeHighlight(); placeWelcome(); });
+ta.addEventListener('scroll', () => {
+  gutter.scrollTop = ta.scrollTop; placeHighlight(); placeWelcome();
+  lensPre.style.transform = 'translate(' + (-ta.scrollLeft) + 'px,' + (-ta.scrollTop) + 'px)';
+});
 ['keyup', 'pointerup', 'focus'].forEach(ev => ta.addEventListener(ev, () => syncCaretUI()));
 document.addEventListener('selectionchange', () => { if (document.activeElement === ta) syncCaretUI(); });
 
@@ -492,6 +501,65 @@ function syncCaretUI(){
   placeHighlight();
   syncActive();
   updateTreeChip();
+  updateLinkInfo();
+  drawLens();
+}
+/* Link lens: the drawn link lines, repainted on top of the text. Every link is a quiet grey, with a dot (●) where it starts and
+   an arrow (◄) where it ends. The links on the line under the mouse (or, with the mouse elsewhere, the caret's line) light up in
+   their own colour. Dashed links are drawn as dash, gap, dash so they cannot be mistaken for solid ones. The text itself is unchanged. */
+const lens = $('#lens'), lensPre = $('#lensPre');
+let hoverLine = -1;
+function drawLens(){
+  const lines = ta.value.split('\n'), items = parse(ta.value), links = C.collectLinks(items);
+  if (!links.length){ lens.hidden = true; return; }
+  const P = pal(), g = C.artGrid(links, items.length);
+  const focus = hoverLine >= 0 ? [hoverLine, hoverLine] : curRange;
+  const hot = new Set();
+  links.forEach(l => { if ((l.from >= focus[0] && l.from <= focus[1]) || (l.to >= focus[0] && l.to <= focus[1])) hot.add(l.k); });
+  const dots = new Set(g.dots.map(d => d.r + ':' + d.c));
+  let html = '';
+  for (let r = 0; r < lines.length; r++){
+    const row = g.rows[r] || '', as = C.artStart(lines[r]);
+    if (!row || as < 0){ html += '\n'; continue; }
+    const first = row.search(/\S/), onCaret = r >= curRange[0] && r <= curRange[1];
+    let s = ' '.repeat(Math.max(0, as - first));
+    for (let c = 0; c < row.length; c++){
+      const ch = row[c];
+      if (ch === ' '){ s += ' '; continue; }
+      const k = g.owner[r][c], lit = hot.has(k);
+      /* a dashed horizontal alternates a dash with a gap; the gap still covers the text underneath */
+      const shown = dots.has(r + ':' + c) ? '●' : ch === '┄' ? (c % 2 ? ' ' : '─') : ch;
+      s += '<i style="color:' + (lit ? P.b[k % P.b.length] : 'var(--muted)') + ';background:' + (onCaret ? 'var(--cur)' : 'var(--surface)') + (lit ? ';font-weight:700' : '') + '">' + shown + '</i>';
+    }
+    html += s + '\n';
+  }
+  lensPre.innerHTML = html;
+  lens.style.left = gutter.offsetWidth + 'px';
+  lensPre.style.transform = 'translate(' + (-ta.scrollLeft) + 'px,' + (-ta.scrollTop) + 'px)';
+  lens.hidden = false;
+}
+/* which line is the mouse over? Redraw only when it changes. */
+const editorBox = $('.editor');
+editorBox.addEventListener('mousemove', e => {
+  const r = ta.getBoundingClientRect(), n = ta.value.split('\n').length;
+  const i = Math.floor((e.clientY - r.top + ta.scrollTop - PAD) / LH);
+  const line = i >= 0 && i < n ? i : -1;
+  if (line !== hoverLine){ hoverLine = line; drawLens(); }
+});
+editorBox.addEventListener('mouseleave', () => { if (hoverLine !== -1){ hoverLine = -1; drawLens(); } });
+
+/* Say in words what the current line is linked to, so the drawn lines are easy to follow. */
+function updateLinkInfo(){
+  const el = $('#linkInfo');
+  if (linkFrom >= 0){ el.hidden = true; return; }
+  const items = parse(ta.value), L = currentLine();
+  const mine = C.collectLinks(items).filter(l => l.from === L || l.to === L);
+  if (!mine.length){ el.hidden = true; return; }
+  el.textContent = mine.map(l => l.from === L
+    ? (l.indirect ? '⇢ ' : '→ ') + shortText(items[l.to].text, 40)
+    : (l.indirect ? '⇠ ' : '← ') + shortText(items[l.from].text, 40)).join('    ');
+  el.title = '→ this line links to   ← links to this line   (dotted arrows are dashed links)';
+  el.hidden = false;
 }
 
 /* ---------- map ---------- */
@@ -516,6 +584,17 @@ function renderMap(){
   lastActive = -2;
   applyZoom();
   syncActive();
+  focusLinks(mapFocus);
+}
+/* Clicking a node lights up the links that touch it and fades the others. */
+let mapFocus = -1;
+function focusLinks(i){
+  mapFocus = i;
+  host.querySelectorAll('.xlink').forEach(p => {
+    const on = i >= 0 && (+p.dataset.a === i || +p.dataset.b === i);
+    p.classList.toggle('hot', on);
+    p.classList.toggle('dim', i >= 0 && !on);
+  });
 }
 /* Side list of trees. Only shown when the text holds more than one. */
 function renderToc(all){
@@ -546,7 +625,7 @@ function scheduleMap(){
 function applyZoom(){
   const s = $('svg', host); if (!s) return;
   const cw = wrap.clientWidth - 24, ch = wrap.clientHeight - 24;
-  if (zoomMode === 'fit' && cw > 50 && ch > 50) zoom = Math.max(.3, Math.min(1, cw / mapSize.w, ch / mapSize.h));
+  if (zoomMode === 'fit' && cw > 50 && ch > 50) zoom = Math.max(innerWidth < 640 ? .55 : .3, Math.min(1, cw / mapSize.w, ch / mapSize.h));
   s.setAttribute('width', Math.round(mapSize.w * zoom));
   s.setAttribute('height', Math.round(mapSize.h * zoom));
   $('#zoomLbl').textContent = Math.round(zoom * 100) + '%';
@@ -628,9 +707,10 @@ host.addEventListener('click', e => {
   }
   const g = e.target.closest('.node');
   if (linkFrom >= 0){ closePop(); if (g && g.dataset.i !== undefined) finishLink(+g.dataset.i, e.shiftKey); else cancelLink(); return; }
-  if (!g){ closePop(); return; }
+  if (!g){ closePop(); focusLinks(-1); return; }
   const i = +g.dataset.i;
   selectLine(i, false);
+  focusLinks(i);
   wrap.focus({preventScroll: true});
   showPop(i, g);
 });

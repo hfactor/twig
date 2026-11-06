@@ -208,3 +208,29 @@ test('viewing one tree labels the links that cross to other trees', () => {
   const whole = C.buildSVG(roots, C.PAL.light, {all: null}).svg;
   assert.ok(!whole.includes('xref'));
 });
+
+test('a link to a line that does not exist yet creates placeholder lines', () => {
+  const items = C.convertTokens(C.parseDoc('A @4 \nB'), {fill: 'TBD'});
+  assert.deepStrictEqual(plain(items), [[0, 'A'], [0, 'B'], [0, 'TBD'], [0, 'TBD']]);
+  assert.deepStrictEqual(C.collectLinks(items).map(l => [l.from, l.to]), [[0, 3]]);
+  const far = C.convertTokens(C.parseDoc('A @500'), {fill: 'TBD'});
+  assert.strictEqual(far.length, 1);
+  assert.strictEqual(far[0].text, 'A @500');
+  assert.strictEqual(C.convertTokens(C.parseDoc('A @3'), {}).length, 1);
+});
+
+test('placeholder parents also fill gaps made by empty indented lines', () => {
+  const items = C.parseDoc('a\n└── b\n            ', {fill: 'TBD'});
+  assert.deepStrictEqual(plain(items).map(x => x[1]), ['a', 'b', 'TBD', '']);
+});
+
+test('art cells know which link drew them, and each link has a start marker', () => {
+  const items = C.convertTokens(C.parseDoc('A @3 \nB @4 \nC\nD'));
+  const links = C.collectLinks(items);
+  const g = C.artGrid(links, items.length);
+  assert.strictEqual(g.dots.length, 2);
+  assert.deepStrictEqual(g.dots.map(d => d.r).sort(), [0, 1]);
+  const owners = new Set(g.owner.flat().filter(k => k >= 0));
+  assert.deepStrictEqual([...owners].sort(), links.map(l => l.k).sort());
+  g.rows.forEach((row, r) => [...row].forEach((ch, c) => { if (ch !== ' ') assert.ok(g.owner[r][c] >= 0, 'unowned cell'); }));
+});

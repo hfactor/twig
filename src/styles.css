@@ -103,9 +103,15 @@ dialog#aboutDlg::backdrop{background:rgba(0,0,0,.4)}
 .statusbar{display:flex;align-items:center;gap:10px;min-height:32px;
   padding:2px max(12px,env(safe-area-inset-right)) max(2px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));
   background:var(--paper);border-top:1px solid var(--line)}
+.linkinfo{min-width:0;color:var(--accent);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.linkinfo[hidden]{display:none}
+.xlink.dim{opacity:.12!important}
+.xlink.hot{stroke:var(--accent);stroke-width:2.6;opacity:1!important}
 .linkhint{color:var(--accent);font-size:12px;font-weight:600;white-space:nowrap}
 .linkhint[hidden],.stats[hidden]{display:none}
 body.linking textarea#editor,body.linking .gutter,body.linking .node{cursor:crosshair}
+.statusbar .feedback{padding:4px 9px;font-size:12px;color:var(--muted);text-decoration:none}
+.statusbar .feedback:hover{color:var(--ink)}
 .ib.sm{width:28px;height:28px}
 .ib.sm svg{width:16px;height:16px}
 .views{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:10px;background:var(--paper)}
@@ -118,6 +124,10 @@ body[data-view="text"] .pane-map{display:none}
 body[data-view="map"] .pane-text{position:absolute;left:-10000px;top:0;width:640px;height:320px;pointer-events:none}
 body[data-view="map"] .txt-only{display:none}
 
+.lens{position:absolute;top:0;right:0;bottom:0;overflow:hidden;pointer-events:none;z-index:1}
+.lens[hidden]{display:none}
+.lens pre{margin:0;padding:16px 18px 16px 14px;font:var(--fs)/24px var(--mono);white-space:pre;will-change:transform}
+.lens i{font-style:normal}
 .welcome-btn{position:absolute;left:0;top:0;z-index:2;height:24px;padding:0 16px;border:0;border-radius:6px;background:var(--accent);color:var(--on-accent);font:600 12px var(--sans);cursor:pointer;will-change:transform}
 .welcome-btn[hidden]{display:none}
 .welcome-btn:hover{filter:brightness(1.08)}
@@ -188,9 +198,25 @@ input.rename{position:absolute;z-index:5;margin:0;padding:0 10px;font:500 14px v
   .maphint .h-fine{display:none} .maphint .h-coarse{display:inline}
 }
 @media (max-width:640px){
+  /* header: logo, File, About and the view switch on one row; the tools scroll sideways on their own row */
+  .bar{gap:2px 4px;padding:4px 8px}
+  .brand{margin-right:0;font-size:15px}
+  .tbtn{padding:6px 8px}
+  .bar>.vsep{display:none}
+  .views{order:2}
+  .tools{order:3;flex:0 0 100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+  .tools::-webkit-scrollbar{display:none}
+  .tools .ib{flex:none;width:38px;height:36px}
+  .tools .vsep{flex:none}
+  .gutter{min-width:3.4em;padding-left:6px;padding-right:8px}
+  .gutter i.root::before{margin-right:4px}
+  .statusbar{gap:6px}
+  .linkinfo{display:none}
   .mapbox{flex-direction:column}
   .toc{width:auto;flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}
   .toc-item{width:auto;flex:none;max-width:160px}
+  .mapctl{top:auto;bottom:10px;right:8px}
+  .maphint{display:none}
 }
 @media print{
   html,body{height:auto;overflow:visible;background:#fff!important;color:#000!important}

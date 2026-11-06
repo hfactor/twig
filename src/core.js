@@ -67,7 +67,7 @@ function parseDoc(text, opts){
     const out = [];
     let prev = -1;
     items.forEach(it => {
-      if (it.text.trim() !== '' && it.depth > prev + 1){
+      if (it.depth > prev + 1){
         for (let d = prev + 1; d < it.depth; d++) out.push({depth: d, text: opts.fill, links: []});
         prev = it.depth;
       } else prev = Math.max(0, Math.min(it.depth, prev + 1));
@@ -129,8 +129,10 @@ function readArt(lines, shift){
   return out;
 }
 
-/* links: from collectLinks. Returns one string per line (empty where nothing is drawn). */
-function linkArt(links, n){
+/* links: from collectLinks. Draws every link into a grid. Returns {rows, owner, dots}:
+   rows: one string per line (empty where nothing is drawn); owner[r][c]: the link (its k) that drew that cell, or -1;
+   dots: where each link starts, as {r, c, k}, for drawing a start marker on top of the text. */
+function artGrid(links, n){
   const spans = links.filter(l => l.to >= 0 && l.to < n && l.to !== l.from)
     .map(l => ({l, a: Math.min(l.from, l.to), b: Math.max(l.from, l.to)}))
     .sort((p, q) => p.a - q.a || (q.b - q.a) - (p.b - p.a));
@@ -139,24 +141,27 @@ function linkArt(links, n){
   const cols = 2 * Math.max(1, ends.length) + 1;
   const grid = Array.from({length: n}, () => new Array(cols).fill(' '));
   const kind = Array.from({length: n}, () => new Array(cols).fill(''));
-  const put = (r, c, ch, k) => { grid[r][c] = ch; kind[r][c] = k; };
+  const owner = Array.from({length: n}, () => new Array(cols).fill(-1));
+  const put = (r, c, ch, k, own) => { grid[r][c] = ch; kind[r][c] = k; owner[r][c] = own; };
   spans.forEach(s => {
     const vt = s.l.indirect ? '┊' : '│', vc = 2 + 2 * s.track;
-    for (let r = s.a + 1; r < s.b; r++) put(r, vc, vt, 'v');
+    for (let r = s.a + 1; r < s.b; r++) put(r, vc, vt, 'v', s.l.k);
   });
   spans.forEach(s => {
     const hz = s.l.indirect ? '┄' : '─', vc = 2 + 2 * s.track;
-    [s.l.from, s.l.to].forEach(r => { for (let c = 0; c < vc; c++) put(r, c, kind[r][c] === 'v' ? '┼' : hz, 'h'); });
-    put(s.l.to, 0, '◄', 'h');
+    [s.l.from, s.l.to].forEach(r => { for (let c = 0; c < vc; c++) put(r, c, kind[r][c] === 'v' ? '┼' : hz, 'h', s.l.k); });
+    put(s.l.to, 0, '◄', 'h', s.l.k);
   });
   spans.forEach(s => {
     const vc = 2 + 2 * s.track, down = s.l.to > s.l.from;
-    put(s.l.from, vc, down ? '┐' : '┘', 'c');
-    put(s.l.to, vc, down ? '╯' : '╮', 'c');
+    put(s.l.from, vc, down ? '┐' : '┘', 'c', s.l.k);
+    put(s.l.to, vc, down ? '╯' : '╮', 'c', s.l.k);
   });
-  spans.forEach(s => put(s.l.from, 2 + 2 * s.track - 1, s.l.indirect ? '┄' : '─', 'h'));
-  return grid.map(row => row.join('').replace(/\s+$/, ''));
+  spans.forEach(s => put(s.l.from, 2 + 2 * s.track - 1, s.l.indirect ? '┄' : '─', 'h', s.l.k));
+  const dots = spans.map(s => ({r: s.l.from, c: grid[s.l.from][0] === '◄' ? 1 : 0, k: s.l.k}));
+  return {rows: grid.map(row => row.join('').replace(/\s+$/, '')), owner, dots};
 }
+function linkArt(links, n){ return artGrid(links, n).rows; }
 
 /* renderItems plus the link art. Use this wherever text is written back to the editor. */
 function renderDoc(items, set){
@@ -286,7 +291,8 @@ function parseLinks(text){
   return {text: text.slice(0, m.index), links, suffix: m[0]};
 }
 /* Turn typed @n tokens into real links. Tokens that point nowhere stay as text.
-   opts.terminated: only tokens already followed by a space, so @1 is left alone while you are still typing @12. */
+   opts.terminated: only tokens already followed by a space, so @1 is left alone while you are still typing @12.
+   opts.fill: a link to a line that does not exist yet adds placeholder lines at the end (up to 30) so there is something to link to. */
 function convertTokens(items, opts){
   items.forEach(it => {
     const p = parseLinks(it.text);
@@ -295,6 +301,9 @@ function convertTokens(items, opts){
     const left = [];
     if (!it.links) it.links = [];
     p.links.forEach(l => {
+      if (opts && opts.fill && l.to > items.length && l.to - items.length <= 30){
+        while (items.length < l.to) items.push({depth: items[items.length - 1].depth, text: opts.fill, links: []});
+      }
       const t = items[l.to - 1];
       if (t && t !== it){ if (!it.links.some(x => x.ref === t && x.indirect === l.indirect)) it.links.push({ref: t, indirect: l.indirect}); }
       else left.push((l.indirect ? '@@' : '@') + l.to);
@@ -457,7 +466,8 @@ function buildSVG(roots, P, o){
         /* link to or from another tree: dotted-grey stub, arrow pointing the way the link goes */
         if (k.ref.dir === 'in'){ [x1, y1, x2, y2] = [x2, y2, x1, y1]; }
         const mx0 = (x1 + x2) / 2;
-        cross += '<path d="M' + r1(x1) + ' ' + r1(y1) + 'C' + r1(mx0) + ' ' + r1(y1) + ' ' + r1(mx0) + ' ' + r1(y2) + ' ' + r1(x2) + ' ' + r1(y2) +
+        cross += '<path class="xlink" data-a="' + (k.ref.dir === 'in' ? k.ref.line : n.i) + '" data-b="' + (k.ref.dir === 'in' ? n.i : k.ref.line) +
+          '" d="M' + r1(x1) + ' ' + r1(y1) + 'C' + r1(mx0) + ' ' + r1(y1) + ' ' + r1(mx0) + ' ' + r1(y2) + ' ' + r1(x2) + ' ' + r1(y2) +
           '" fill="none" stroke="' + P.muted + '" stroke-width="1.4"' + (k.ref.indirect ? ' stroke-dasharray="6 5"' : '') + ' marker-end="url(#twah)" opacity=".85"/>';
         return;
       }
@@ -495,7 +505,7 @@ function buildSVG(roots, P, o){
       const d = Math.abs(dy) < 1 ? 'M' + r1(x1) + ' ' + r1(y1) + 'H' + r1(x2)
         : 'M' + r1(x1) + ' ' + r1(y1) + 'H' + r1(xk - r) + 'Q' + r1(xk) + ' ' + r1(y1) + ' ' + r1(xk) + ' ' + r1(y1 + sg * r) +
           'V' + r1(y2 - sg * r) + 'Q' + r1(xk) + ' ' + r1(y2) + ' ' + r1(xk - r) + ' ' + r1(y2) + 'H' + r1(x2);
-      cross += '<path d="' + d + '" fill="none" stroke="' + P.muted + '" stroke-width="1.4"' + (s.indirect ? ' stroke-dasharray="6 5"' : '') +
+      cross += '<path class="xlink" data-a="' + s.n.i + '" data-b="' + s.t.i + '" d="' + d + '" fill="none" stroke="' + P.muted + '" stroke-width="1.4"' + (s.indirect ? ' stroke-dasharray="6 5"' : '') +
         ' marker-end="url(#twah)" opacity=".8" pointer-events="none"/>';
     });
     L.w = Math.max(L.w, Math.ceil(edge + ends.length * 11 + 16));
@@ -569,7 +579,7 @@ function slug(roots){
 
 
 const Core = {SETS, PAL, LINE_LEN, LINE_STEP,
-  parseDoc, renderDoc, renderItems, stripArt, artStart, repair,
+  parseDoc, renderDoc, renderItems, stripArt, artStart, artGrid, repair,
   parseLinks, convertTokens, cloneItems, collectLinks,
   subtreeEnd, blockEnd, opIndent, opOutdent, opMove, opSetLevel, opMoveTo, opDuplicate,
   cleanItems, buildTree, assignBranches, buildSVG,
