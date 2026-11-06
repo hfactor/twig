@@ -224,6 +224,28 @@ test('placeholder parents also fill gaps made by empty indented lines', () => {
   assert.deepStrictEqual(plain(items).map(x => x[1]), ['a', 'b', 'TBD', '']);
 });
 
+test('moving a branch: inside, before and after, keeping its children', () => {
+  const mk = () => [[0, 'r'], [1, 'a'], [2, 'a1'], [1, 'b'], [1, 'c'], [2, 'c1']].map(([depth, text]) => ({depth, text}));
+  let it = mk();
+  assert.strictEqual(C.opMoveBranch(it, 1, 4, 'inside'), 4);              // a (with a1) becomes the last child of c
+  assert.deepStrictEqual(plain(it).map(x => x.join(':')), ['0:r', '1:b', '1:c', '2:c1', '2:a', '3:a1']);
+  it = mk();
+  assert.strictEqual(C.opMoveBranch(it, 4, 1, 'before'), 1);               // c (with c1) before a
+  assert.deepStrictEqual(plain(it).map(x => x.join(':')), ['0:r', '1:c', '2:c1', '1:a', '2:a1', '1:b']);
+  it = mk();
+  C.opMoveBranch(it, 3, 5, 'after');                                       // b after c1: sibling of c1, one level deeper
+  assert.deepStrictEqual(plain(it).map(x => x.join(':')), ['0:r', '1:a', '2:a1', '1:c', '2:c1', '2:b']);
+  it = mk();
+  assert.strictEqual(C.opMoveBranch(it, 1, 2, 'inside'), -1);              // not into its own branch
+  assert.deepStrictEqual(plain(it).length, 6);
+});
+
+test('a moved branch keeps its links', () => {
+  const it = C.convertTokens(C.parseDoc('A @3 \nB\nC'));
+  C.opMoveBranch(it, 2, 0, 'before');                                      // C goes to the top
+  assert.deepStrictEqual(linkSet(it), ['A>C>false']);
+});
+
 test('art cells know which link drew them, and each link has a start marker', () => {
   const items = C.convertTokens(C.parseDoc('A @3 \nB @4 \nC\nD'));
   const links = C.collectLinks(items);

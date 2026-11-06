@@ -703,7 +703,71 @@ function showPop(i, g){
   });
   host.appendChild(p);
 }
+/* Drag a node onto another to move its whole branch: the middle drops inside it (as a child), the top or bottom edge puts it
+   before or after it. Mouse and pen only, so touch can still scroll the map. Esc cancels. */
+let drag = null, justDragged = false;
+function endDrag(){
+  if (!drag) return;
+  if (drag.ghost) drag.ghost.remove();
+  if (drag.line) drag.line.remove();
+  host.querySelectorAll('.drop-in').forEach(n => n.classList.remove('drop-in'));
+  document.body.classList.remove('dragging');
+  drag = null;
+}
+function showDrop(e){
+  host.querySelectorAll('.drop-in').forEach(n => n.classList.remove('drop-in'));
+  if (drag.line){ drag.line.remove(); drag.line = null; }
+  drag.drop = null;
+  const el = document.elementFromPoint(e.clientX, e.clientY), g = el && el.closest ? el.closest('#mapHost .node') : null;
+  if (!g || g.classList.contains('xref')) return;
+  const t = +g.dataset.i;
+  if (t >= drag.i && t < drag.end) return;              /* not into its own branch */
+  const r = g.getBoundingClientRect(), f = (e.clientY - r.top) / r.height;
+  const where = f < .28 ? 'before' : f > .72 ? 'after' : 'inside';
+  drag.drop = {t, where};
+  if (where === 'inside'){ g.classList.add('drop-in'); return; }
+  const hr = host.getBoundingClientRect();
+  drag.line = mk('div', 'dropline');
+  drag.line.style.cssText = 'left:' + (r.left - hr.left) + 'px;top:' + ((where === 'before' ? r.top : r.bottom) - hr.top - 1.5) + 'px;width:' + r.width + 'px';
+  host.appendChild(drag.line);
+}
+function moveBranch(src, tgt, where){
+  const st = state(), ni = C.opMoveBranch(st.items, src, tgt, where);
+  if (ni < 0) return;
+  commit(st.items, ni, st.items[ni].text.length);
+  toast('Moved “' + shortText(st.items[ni].text) + '”');
+}
+host.addEventListener('pointerdown', e => {
+  if (e.button !== 0 || e.pointerType === 'touch' || linkFrom >= 0 || renaming) return;
+  const g = e.target.closest('.node');
+  if (!g || g.classList.contains('xref') || g.dataset.i === undefined) return;
+  const i = +g.dataset.i;
+  drag = {i, end: C.subtreeEnd(parse(ta.value), i), x: e.clientX, y: e.clientY, on: false, text: g.textContent, ghost: null, line: null, drop: null};
+});
+document.addEventListener('pointermove', e => {
+  if (!drag) return;
+  if (!drag.on){
+    if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
+    drag.on = true; closePop();
+    document.body.classList.add('dragging');
+    drag.ghost = mk('div', 'dragghost'); drag.ghost.textContent = shortText(drag.text);
+    document.body.appendChild(drag.ghost);
+  }
+  drag.ghost.style.left = (e.clientX + 14) + 'px'; drag.ghost.style.top = (e.clientY + 10) + 'px';
+  showDrop(e);
+});
+document.addEventListener('pointerup', () => {
+  if (!drag) return;
+  const d = drag;
+  endDrag();
+  if (!d.on) return;
+  justDragged = true; setTimeout(() => { justDragged = false; }, 60);
+  if (d.drop) moveBranch(d.i, d.drop.t, d.drop.where);
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') endDrag(); });
+
 host.addEventListener('click', e => {
+  if (justDragged) return;
   /* a node that stands for a link to or from another tree: jump to that tree and select the line */
   const x = e.target.closest('.xref');
   if (x){

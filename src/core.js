@@ -272,6 +272,20 @@ function opMoveTo(items, a, b, line){
   repair(items);
   return t;
 }
+/* Move the branch at a next to or into line t. where: 'inside' (last child of t), 'before' or 'after' (a sibling of t).
+   Returns the new index of the branch, or -1 when t is inside the branch itself. */
+function opMoveBranch(items, a, t, where){
+  const e = subtreeEnd(items, a);
+  if (t >= a && t < e) return -1;
+  const blk = items.splice(a, e - a);
+  if (t >= e) t -= blk.length;
+  const at = where === 'before' ? t : subtreeEnd(items, t);
+  const depth = items[t].depth + (where === 'inside' ? 1 : 0);
+  const delta = depth - blk[0].depth;
+  blk.forEach(x => { x.depth += delta; });
+  ins(items, at, blk);
+  return at;
+}
 function opDuplicate(items, a, b){
   const e = blockEnd(items, a, b);
   const copy = items.slice(a, e).map(x => ({depth: x.depth, text: x.text}));
@@ -581,7 +595,7 @@ function slug(roots){
 const Core = {SETS, PAL, LINE_LEN, LINE_STEP,
   parseDoc, renderDoc, renderItems, stripArt, artStart, artGrid, repair,
   parseLinks, convertTokens, cloneItems, collectLinks,
-  subtreeEnd, blockEnd, opIndent, opOutdent, opMove, opSetLevel, opMoveTo, opDuplicate,
+  subtreeEnd, blockEnd, opIndent, opOutdent, opMove, opMoveBranch, opSetLevel, opMoveTo, opDuplicate,
   cleanItems, buildTree, assignBranches, buildSVG,
   toTree, toMarkdown, toMermaid, toMermaidGraph, toOPML, toJSON, slug};
 if (typeof module !== 'undefined' && module.exports) module.exports = Core;
